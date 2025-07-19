@@ -29,21 +29,21 @@ let tags = {
 const defaultMenu = {
 before: `
 *╭━━━〔 𝖨𝖭𝖥𝖮 〕━━━╮*
-┃ *Hola* 👋 **%name**
+┃ *Hola* 👋 *%name*
 ┃ 📅 *%week*, %date
-┃ ⏰ *Hora:* %time
-┃ ⚡ *Nivel:* %level | ⭐ *XP:* %totalexp
-┃ 🍬 *Dulces:* %limit
+┃ ⏰ *Hora »* %time
+┃ ⚡ *Nivel »* %level | ⭐ *XP »* %totalexp
+┃ 🍬 *Dulces »* %limit
 *╰━━━━━━━━━━━━━━━━━━━━╯*
 
 %readmore
 
-*𝗠𝗘𝗡𝗨́ 𝗗𝗘 𝗖𝗢𝗠𝗔𝗡𝗗𝗢𝗦*
+*ᴍᴇɴᴜ ᴅᴇ ᴄᴏᴍᴀɴᴅᴏs*
 `.trimStart(),
-header: '\n*╭─〔 %category 〕─╮*',
+header: '\n*╭─〔 *%category* 〕─╮*',
 body: '┇ ➤ %cmd',
 footer: '*╰─────────────╯*',
-after: '\n\n*┗ 𝖯𝗈𝗐𝖾𝗋𝖾𝖽 𝖡𝗒 𝖠𝖽𝗈 ┛'
+after: '\n\n*┗ 𝖯𝗈𝗐𝖾𝗋𝖾𝖽 𝖡𝗒 𝖠𝖽𝗈 ┛*'
 }
 
 let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
