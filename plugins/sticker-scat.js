@@ -6,7 +6,7 @@ let handler = async (m, {
 }) => {
     let res = await fetch('https://nekos.life/api/v2/img/meow')
     let json = await res.json()
-    let stiker = await sticker(null, json.url, global.packname, global.author)
+    let stiker = await sticker(null, json.url, global.author)
     if (stiker) return conn.sendFile(m.chat, stiker, 'sticker.gif', '', m, false, {
         asSticker: true
     })
