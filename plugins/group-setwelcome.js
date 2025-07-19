@@ -22,7 +22,7 @@ let handler = async (m, { conn, text, isROwner, isOwner }) => {
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
 *┃* ✅ *La bienvenida del grupo ha sido configurada con éxito.*
 *┃*
-*┃* > Ahora cada nuevo miembro verá tu mensaje personalizado.
+*┃* Ahora cada nuevo miembro verá tu mensaje personalizado.
 *╰━━━━━━━━━━━━━━━━━━━━━━╯*`, 
         fkontak, m)
 
