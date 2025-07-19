@@ -8,7 +8,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   try {
     await m.react('🕒');
 
-    const apiURL = `https://theadonix-api.vercel.app/api/adonix?q=${encodeURIComponent(text)}`;
+    const apiURL = `https://apiadonix.vercel.app/api/adonix?q=${encodeURIComponent(text)}`;
     const res = await fetch(apiURL);
 
     // Verifica que la respuesta sea JSON
