@@ -23,13 +23,16 @@ export async function before(m, { conn, participants, groupMetadata }) {
         await conn.sendAi(m.chat, botname, textbot, welcome, img, img, canal)
       } else {
         let bienvenida = `
-*╭┈┈≫* *「 𝐃𝐎𝐆𝐄 𝐁𝐎𝐓 ⚡ 」≪┈┈╮*
-*┊*
-*┊* 👋 *Bienvenid@* ${userTag}*
-*┊* 🏠 *Al grupo:* ${groupName}
-*┊* 📋 *Descripción:*
-*┊* > ${groupDesc}
-*╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
+*╭━━━━━━━━━━━━━━━━━━━━━━╮*
+*┃* *🌟 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 🌟* *┃*
+*┃━━━━━━━━━━━━━━━━━━━━━━┃*
+*┃* 👋 *¡Qué onda* ${userTag} *!* *┃*
+*┃* 🏠 *Bienvenid@ al grupo:* *${groupName}* *┃*
+*┃* 📜 *Descripción:* *┃*
+*┃* > ${groupDesc} *┃*
+*┃━━━━━━━━━━━━━━━━━━━━━━┃*
+*┃* 🎉 *Pásala chido, no seas gach@* 🎉 *┃*
+*╰━━━━━━━━━━━━━━━━━━━━━━╯*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, bienvenida, img, img, canal)
       }
@@ -45,12 +48,15 @@ export async function before(m, { conn, participants, groupMetadata }) {
         await conn.sendAi(m.chat, botname, textbot, bye, img, img, canal)
       } else {
         let despedida = `
-*╭┈┈≫* *「 𝐃𝐎𝐆𝐄 𝐁𝐎𝐓 ⚡ 」≪┈┈╮*
-*┊*
-*┊* 👋 *Adiós* ${userTag}
-*┊* 🚪 *Saliste del grupo* ${groupName}
-*┊* > ❌ *Jamás te quisimos aquí :V*
-*╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
+*╭━━━━━━━━━━━━━━━━━━━━━━╮*
+*┃* *🌙 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗚𝗢𝗢𝗗𝗕𝗬𝗘 🌙* *┃*
+*┃━━━━━━━━━━━━━━━━━━━━━━┃*
+*┃* 👋 *Nos vemos* ${userTag} *!* *┃*
+*┃* 🚪 *Saliste de* *${groupName}* *┃*
+*┃* > ❌ *Ya no te extrañaremos, va* :v *┃*
+*┃━━━━━━━━━━━━━━━━━━━━━━┃*
+*┃* 💔 *Bye y cuídate, no la riegues* 💔 *┃*
+*╰━━━━━━━━━━━━━━━━━━━━━━╯*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, despedida, img, img, canal)
       }
