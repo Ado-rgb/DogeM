@@ -1,50 +1,59 @@
-import {WAMessageStubType} from '@whiskeysockets/baileys'
+import { WAMessageStubType } from '@whiskeysockets/baileys'
 import fetch from 'node-fetch'
 
-export async function before(m, {conn, participants, groupMetadata}) {
-  if (!m.messageStubType || !m.isGroup) return !0;
-  let pp = await conn.profilePictureUrl(m.messageStubParameters[0], 'image').catch(_ => 'https://qu.ax/jYQH.jpg')
-  let img = await (await fetch(`${pp}`)).buffer()
-  let chat = global.db.data.chats[m.chat]
+export async function before(m, { conn, participants, groupMetadata }) {
+  if (!m.messageStubType || !m.isGroup) return !0
 
-  if (chat.bienvenida && m.messageStubType == 27) {
-    if (chat.sWelcome) {
-      let user = `@${m.messageStubParameters[0].split`@`[0]}`
-      let welcome = chat.sWelcome
-        .replace('@user', () => user)
-        .replace('@group', () => groupMetadata.subject)
-        .replace('@desc', () => groupMetadata.desc || 'sin descripción');
-      await conn.sendAi(m.chat, botname, textbot, welcome, img, img, canal)
-    } else {
-      let bienvenida = `┌─★ 𝑺𝑶𝑭𝑰 - 𝑩𝑶𝑻 \n│「 Bienvenido 」\n└┬★ 「 @${m.messageStubParameters[0].split`@`[0]} 」\n   │✑  Bienvenido a\n   │✑  ${groupMetadata.subject}\n   │✑  Descripción:\n${groupMetadata.desc || 'sin descripción'}\n   └───────────────┈ ⳹`
-      await conn.sendAi(m.chat, botname, textbot, bienvenida, img, img, canal)
+  let userId = m.messageStubParameters?.[0] || ''
+  let userTag = `@${userId.split('@')[0]}`
+  let pp = await conn.profilePictureUrl(userId, 'image').catch(_ => 'https://qu.ax/jYQH.jpg')
+  let img = await (await fetch(pp)).buffer()
+  let chat = global.db.data.chats[m.chat]
+  let groupName = groupMetadata.subject || 'este grupo'
+  let groupDesc = groupMetadata.desc || 'sin descripción'
+
+  if (chat.bienvenida) {
+    if (m.messageStubType == 27) {
+      // Entrada
+      if (chat.sWelcome) {
+        let welcome = chat.sWelcome
+          .replace('@user', userTag)
+          .replace('@group', groupName)
+          .replace('@desc', groupDesc)
+        await conn.sendAi(m.chat, botname, textbot, welcome, img, img, canal)
+      } else {
+        let bienvenida = `
+*╭┈┈≫* *「 𝐃𝐎𝐆𝐄 𝐁𝐎𝐓 ⚡ 」≪┈┈╮*
+*┊*
+*┊* 👋 *Bienvenid@* ${userTag}*
+*┊* 🏠 *Al grupo:* ${groupName}
+*┊* 📋 *Descripción:*
+*┊*> ${groupDesc}
+*╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
+        `.trim()
+        await conn.sendAi(m.chat, botname, textbot, bienvenida, img, img, canal)
+      }
+    }
+
+    if (m.messageStubType == 28 || m.messageStubType == 32) {
+      // Salida o expulsión
+      if (chat.sBye) {
+        let bye = chat.sBye
+          .replace('@user', userTag)
+          .replace('@group', groupName)
+          .replace('@desc', groupDesc)
+        await conn.sendAi(m.chat, botname, textbot, bye, img, img, canal)
+      } else {
+        let despedida = `
+*╭┈┈≫* *「 𝐃𝐎𝐆𝐄 𝐁𝐎𝐓 ⚡ 」≪┈┈╮*
+*┊*
+*┊* 👋 *Adiós* ${userTag}
+*┊* 🚪 *Saliste del grupo* ${groupName}
+*┊*> ❌ *Jamás te quisimos aquí :V*
+*╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
+        `.trim()
+        await conn.sendAi(m.chat, botname, textbot, despedida, img, img, canal)
+      }
     }
   }
-  
-  if (chat.bienvenida && m.messageStubType == 28) {
-    if (chat.sBye) {
-      let user = `@${m.messageStubParameters[0].split`@`[0]}`
-      let bye = chat.sBye
-        .replace('@user', () => user)
-        .replace('@group', () => groupMetadata.subject)
-        .replace('@desc', () => groupMetadata.desc || 'sin descripción');
-      await conn.sendAi(m.chat, botname, textbot, bye, img, img, canal)
-    } else {
-      let bye = `┌─★ 𝑺𝑶𝑭𝑰 - 𝑩𝑶𝑻 \n│「 BAYY 👋 」\n└┬★ 「 @${m.messageStubParameters[0].split`@`[0]} 」\n   │✑  Largate\n   │✑ Jamás te quisimos aquí\n   └───────────────┈ ⳹`
-      await conn.sendAi(m.chat, botname, textbot, bye, img, img, canal)
-    }
-  }
-  
-  if (chat.bienvenida && m.messageStubType == 32) {
-    if (chat.sBye) {
-      let user = `@${m.messageStubParameters[0].split`@`[0]}`
-      let bye = chat.sBye
-        .replace('@user', () => user)
-        .replace('@group', () => groupMetadata.subject)
-        .replace('@desc', () => groupMetadata.desc || 'sin descripción');
-      await conn.sendAi(m.chat, botname, textbot, bye, img, img, canal)
-    } else {
-      let kick = `┌─★ 𝑺𝑶𝑭𝑰 - 𝑩𝑶𝑻 \n│「 BAYY 👋 」\n└┬★ 「 @${m.messageStubParameters[0].split`@`[0]} 」\n   │✑  Largate\n   │✑ Jamás te quisimos aquí\n   └───────────────┈ ⳹`
-      await conn.sendAi(m.chat, botname, textbot, kick, img, img, canal)
-    }
-}}
+}
