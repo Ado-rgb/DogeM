@@ -1,14 +1,37 @@
-import Scraper from "@SumiFX/Scraper"
+import fetch from 'node-fetch';
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-if (!text) return m.reply('⭐ Ingresa el nombre de la imágen que estas buscando.\n\n`Ejemplo:`\n' + `> *${usedPrefix + command}* DOGE Icons`)
-try {
-let { dl_url } = await Scraper.pinterest(text)
-await conn.sendFile(m.chat, dl_url, 'thumbnail.jpg', null, m)
-} catch {
-}}
-handler.help = ['pinterest <búsqueda>']
-handler.tags = ['img']
-handler.command = ['pinterest'] 
-//handler.limit = 1
-export default handler
+  if (!text) return m.reply(
+    `*╭━💚〔 BUSCADOR PINTEREST 〕💚━╮*\n` +
+    `┃ ⚠️ Escribe qué quieres buscar\n` +
+    `┃ 🌿 Ejemplo: *${usedPrefix + command} Twice*\n` +
+    `*╰━━━━━━━━━━━━━━━━━━━━╯*`
+  );
+
+  try {
+    const url = `https://delirius-apiofc.vercel.app/search/pinterest?text=${encodeURIComponent(text)}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.status || !data.results || data.results.length === 0)
+      return m.reply('*╭━❌〔 ERROR 〕❌━╮*\n┃ No encontré imágenes para esa búsqueda.\n*╰━━━━━━━━━━━━╯*');
+
+    // Limitar a máximo 10 imágenes para no spamear
+    let images = data.results.slice(0, 10);
+
+    // Enviar las imágenes como mensaje con media
+    for (let img of images) {
+      await conn.sendMessage(m.chat, { image: { url: img }, caption: `🌿 Resultado de: *${text}*` }, { quoted: m });
+    }
+
+  } catch (e) {
+    console.error('Error en búsqueda Pinterest:', e);
+    m.reply('*╭━❌〔 ERROR 〕❌━╮*\n┃ Ocurrió un error al buscar en Pinterest.\n*╰━━━━━━━━━━━━╯*');
+  }
+};
+
+handler.help = ['pinterest <texto>'];
+handler.tags = ['search'];
+handler.command = /^(pinterest|pin)$/i;
+handler.register = true;
+export default handler;
