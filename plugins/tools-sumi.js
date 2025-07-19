@@ -1,21 +1,54 @@
 import fetch from 'node-fetch';
 
-const handler = async (m, { conn, text }) => {
-if (!text) return conn.reply(m.chat, '*𝘌𝘴𝘤𝘳𝘪𝘣𝘦 𝘶𝘯 𝘛𝘦𝘹𝘵𝘰 𝘱𝘢𝘳𝘢 𝘩𝘢𝘣𝘭𝘢𝘳 𝘤𝘰𝘯 𝘚𝘪𝘴𝘬𝘦𝘥*', m);
+let handler = async (m, { conn, text, usedPrefix, command }) => {
+  if (!text) {
+    return m.reply(`🤖 *Adonix IA* 🤖\n\nUsa:\n${usedPrefix + command} [tu pregunta]\n\nEjemplo:\n${usedPrefix + command} haz un código JS que sume dos números`);
+  }
 
-try {
-let msg = await conn.sendMessage(m.chat, {text: '*𝘚𝘪𝘴𝘬𝘦𝘥 𝘦𝘴𝘵𝘢́ 𝘦𝘴𝘤𝘳𝘪𝘣𝘪𝘦𝘯𝘥𝘰...*'});
+  try {
+    await m.react('🕒');
 
-let userid = conn.getName(m.sender) || 'default';
-let apiurl = `https://api.guruapi.tech/ai/gpt4?username=${userid}&query=hii${encodeURIComponent(text)}`;
-let result = await fetch(apiurl);
-let response = await result.json();
+    const apiURL = `https://theadonix-api.vercel.app/api/adonix?q=${encodeURIComponent(text)}`;
+    const res = await fetch(apiURL);
+    const data = await res.json();
 
-await conn.relayMessage(m.chat, { protocolMessage: { key: msg.key, type: 14, editedMessage: { conversation: response.msg }}}, {});
-} catch {}}
+    // Si devuelve imagen
+    if (data.imagen_generada) {
+      await conn.sendMessage(m.chat, {
+        image: { url: data.imagen_generada },
+        caption: `🖼️ *Adonix IA* generó esta imagen:\n\n📌 _${data.pregunta}_\n${data.mensaje || ''}`,
+      }, { quoted: m });
+      await m.react('✅');
+      return;
+    }
 
-handler.help = ["Ia"]
-handler.tags = ["search"]
-handler.command = ["chatgpt", "ia", "gpt"];
+    // Si devuelve respuesta tipo texto
+    if (data.respuesta && typeof data.respuesta === 'string') {
+      const [mensaje, ...codigo] = data.respuesta.split(/```(?:javascript|js|html|)/i);
+      let respuestaFinal = `🌵 *Adonix IA :*\n\n${mensaje.trim()}`;
 
-export default handler
+      if (codigo.length > 0) {
+        respuestaFinal += `\n\n💻 *Código:*\n\`\`\`js\n${codigo.join('```').trim().slice(0, 3900)}\n\`\`\``;
+      }
+
+      await m.reply(respuestaFinal);
+      await m.react('✅');
+      return;
+    }
+
+    // Si no trae ni imagen ni texto válido
+    await m.react('❌');
+    return m.reply('❌ No se pudo procesar la respuesta de Adonix IA.');
+
+  } catch (e) {
+    console.error('[ERROR ADONIX IA]', e);
+    await m.react('❌');
+    return m.reply(`❌ Error al usar Adonix IA:\n\n${e.message}`);
+  }
+};
+
+handler.help = ['ia'];
+handler.tags = ['ia'];
+handler.command = ['adonix', 'ia', 'adonixia'];
+handler.register = true
+export default handler;
