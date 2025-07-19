@@ -40,7 +40,7 @@ let handler = async (m, { conn, args, __dirname, usedPrefix, command }) => {
                 let buff = await readFileSync(filename)
                 await conn.sendFile(m.chat, buff, ran, null, m, true, { type: 'audioMessage', ptt: true })
             })
-        } else m.reply(`🍭 Responde al *Audio o Nota de Voz.*`)
+        } else m.reply(`➣ 𝖱𝖾𝗌𝗉𝗈𝗇𝖽𝖾 𝖺𝗅 *Audio o nota de 𝗏𝗈𝗓* 𝖺𝗅 𝖼𝗎𝖺𝗅 𝗅𝖾 𝗊𝗎𝗂𝖾𝗋𝖾𝗌 𝖺𝗉𝗅𝗂𝖼𝖺𝗋 𝖾𝖿𝖾𝖼𝗍𝗈.`)
     } catch {
     }
 }
