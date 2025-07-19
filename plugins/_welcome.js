@@ -24,14 +24,14 @@ export async function before(m, { conn, participants, groupMetadata }) {
       } else {
         let bienvenida = `
 *╭━━━━━━━━━━━━━━━━━━━━━━╮*
-*┃* *🌟 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 🌟* *┃*
+*┃* *🌟 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 🌟* 
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
-*┃* 👋 *¡Qué onda* ${userTag} *!* *┃*
-*┃* 🏠 *Bienvenid@ al grupo:* *${groupName}* *┃*
-*┃* 📜 *Descripción:* *┃*
+*┃* 👋 *¡Qué onda* ${userTag} *!* 
+*┃* 🏠 *Bienvenid@ al grupo:* *${groupName}* 
+*┃* 📜 *Descripción:* 
 *┃* > ${groupDesc} *┃*
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
-*┃* 🎉 *Pásala chido, no seas gach@* 🎉 *┃*
+*┃* 🎉 *Pásala chido* 
 *╰━━━━━━━━━━━━━━━━━━━━━━╯*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, bienvenida, img, img, canal)
@@ -49,13 +49,13 @@ export async function before(m, { conn, participants, groupMetadata }) {
       } else {
         let despedida = `
 *╭━━━━━━━━━━━━━━━━━━━━━━╮*
-*┃* *🌙 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗚𝗢𝗢𝗗𝗕𝗬𝗘 🌙* *┃*
+*┃* *🌙 𝗗𝗢𝗚𝗘 𝗕𝗢𝗧 ⚡ 𝗚𝗢𝗢𝗗𝗕𝗬𝗘 🌙* 
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
-*┃* 👋 *Nos vemos* ${userTag} *!* *┃*
-*┃* 🚪 *Saliste de* *${groupName}* *┃*
-*┃* > ❌ *Ya no te extrañaremos, va* :v *┃*
+*┃* 👋 *Nos vemos* ${userTag} *!*
+*┃* 🚪 *Saliste de* *${groupName}* 
+*┃* ❌ *Ya no te extrañaremos, va* :v
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
-*┃* 💔 *Bye y cuídate, no la riegues* 💔 *┃*
+*┃* 💔 *Bye y cuídate, no la riegues* 💔
 *╰━━━━━━━━━━━━━━━━━━━━━━╯*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, despedida, img, img, canal)
