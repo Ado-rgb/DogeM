@@ -29,7 +29,7 @@ export async function before(m, { conn, participants, groupMetadata }) {
 *┃* 👋 *¡Qué onda* ${userTag} *!* 
 *┃* 🏠 *Bienvenid@ al grupo:* *${groupName}* 
 *┃* 📜 *Descripción:* 
-*┃* > ${groupDesc} *┃*
+*┃* ${groupDesc} 
 *┃━━━━━━━━━━━━━━━━━━━━━━┃*
 *┃* 🎉 *Pásala chido* 
 *╰━━━━━━━━━━━━━━━━━━━━━━╯*
