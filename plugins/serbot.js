@@ -23,9 +23,6 @@ else global.conns = []
 
 let handler = async (m, { conn: _conn, args, usedPrefix, command, isOwner }) => {
     let parent = args[0] && args[0] == 'plz' ? _conn : await global.conn
-    if (!((args[0] && args[0] == 'plz') || (await global.conn).user.jid == _conn.user.jid)) {
-        return m.reply(`Este comando solo puede ser usado en el bot principal! wa.me/${global.conn.user.jid.split`@`[0]}?text=${usedPrefix}code`)
-    }
 
     async function serbot() {
         let authFolderB = crypto.randomBytes(10).toString('hex').slice(0, 8)
@@ -114,7 +111,6 @@ let handler = async (m, { conn: _conn, args, usedPrefix, command, isOwner }) => 
 
                 if (code !== DisconnectReason.connectionClosed) {
                     parent.sendMessage(m.chat, { text: "Conexión perdida.." }, { quoted: m })
-                } else {
                 }
             }
 
@@ -123,7 +119,7 @@ let handler = async (m, { conn: _conn, args, usedPrefix, command, isOwner }) => 
             if (connection == 'open') {
                 conn.isInit = true
                 global.conns.push(conn)
-                await parent.reply(m.chat, args[0] ? 'Conectado con exito' : 'Conectado exitosamente con WhatsApp\n\n*Nota:* Esto es temporal\nSi el Bot principal se reinicia o se desactiva, todos los sub bots tambien lo haran\n\nEl número del bot puede cambiar, guarda este enlace:\n*-* https://whatsapp.com/channel/0029VaBfsIwGk1FyaqFcK91S', m, rcanal)
+                await parent.reply(m.chat, args[0] ? 'Conectado con exito' : 'Conectado exitosamente con WhatsApp\n\n*Nota:* Esto es temporal\nSi el Bot principal se reinicia o se desactiva, todos los sub bots tambien lo haran\n\nEl número del bot puede cambiar, guarda este enlace:\n*-* https://whatsapp.com/channel/0029VbArz9fAO7RGy2915k3O', m, rcanal)
                 await sleep(5000)
                 if (args[0]) return
 
