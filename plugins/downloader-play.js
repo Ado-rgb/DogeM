@@ -91,7 +91,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     const videoInfo = search.all[0];
     const { title, thumbnail, timestamp, views, ago, url } = videoInfo;
     const vistas = formatoVistas(views);
-    const infoMessage = `> 𝙴𝙽𝚅𝙸𝙰𝙽𝙳𝙾 𝙿𝙴𝙳𝙸𝙳𝙾.`;
+    const infoMessage = `> *「⭐」* » sᴇ ᴇsᴛᴀ ᴇɴᴠɪᴀɴᴅᴏ ᴛᴜ ᴘᴇᴅɪᴅᴏ.`;
     const thumb = (await conn.getFile(thumbnail))?.data;
 
     const JT = {
