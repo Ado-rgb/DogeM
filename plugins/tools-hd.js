@@ -1,45 +1,53 @@
-import FormData from "form-data"
-import Jimp from "jimp"
-const handler = async (m, {conn, usedPrefix, command}) => {
-  try {    
-  let q = m.quoted ? m.quoted : m
-  let mime = (q.msg || q).mimetype || q.mediaType || ""
-  if (!mime) return conn.reply(m.chat, `⭐ Responde a una *Imagen.*`, m, rcanal)
-  await m.react('🕓')
+import fetch from 'node-fetch'
+import FormData from 'form-data'
+
+let handler = async (m, { conn, command }) => {
+  conn.hdr = conn.hdr || {}
+  if (m.sender in conn.hdr) throw '⏳ Aún hay un proceso pendiente, espera...'
+
+  let q = m.quoted || m
+  let mime = (q.msg || q).mimetype || q.mediaType || ''
+  if (!mime) throw '🖼️ Envía o responde a una imagen para mejorarla.'
+  if (!/image\/(jpe?g|png)/.test(mime)) throw `❌ Formato *${mime}* no compatible. Usa JPG o PNG.`
+
+  conn.hdr[m.sender] = true
+  await conn.sendMessage(m.chat, { react: { text: '♻️', key: m.key } })
+
   let img = await q.download?.()
-  let pr = await remini(img, "enhance")
-  await conn.sendFile(m.chat, pr, 'thumbnail.jpg', listo, m, null, rcanal)
-  await m.react('✅')
-  } catch {
-  await m.react('✖️')
-}}
-handler.help = ["hd"]
-handler.tags = ["tools"]
-handler.command = ["remini", "hd", "enhance"] 
+  let footer = '📸 Imagen mejorada con IA.'
+  let error = null
+
+  try {
+    const imageUrl = await up(img)
+    const api = `https://fastrestapis.fasturl.cloud/aiimage/upscale?imageUrl=${encodeURIComponent(imageUrl)}&resize=4`
+    const res = await fetch(api)
+
+    if (!res.ok) throw await res.text()
+
+    const buffer = await res.buffer()
+    await conn.sendFile(m.chat, buffer, 'hd.jpg', footer, m)
+  } catch (e) {
+    error = e?.message || e || '❌ Error al procesar la imagen.'
+  } finally {
+    delete conn.hdr[m.sender]
+    if (error) m.reply(String(error))
+  }
+}
+
+handler.help = ['hd']
+handler.tags = ['tools']
+handler.command = /^(hd|remini)$/i
+handler.register = true
 export default handler
 
-async function remini(imageData, operation) {
-  return new Promise(async (resolve, reject) => {
-    const availableOperations = ["enhance", "recolor", "dehaze"]
-    if (availableOperations.includes(operation)) {
-      operation = operation
-    } else {
-      operation = availableOperations[0]
-    }
-    const baseUrl = "https://inferenceengine.vyro.ai/" + operation + ".vyro"
-    const formData = new FormData()
-    formData.append("image", Buffer.from(imageData), {filename: "enhance_image_body.jpg", contentType: "image/jpeg"})
-    formData.append("model_version", 1, {"Content-Transfer-Encoding": "binary", contentType: "multipart/form-data; charset=utf-8"})
-    formData.submit({url: baseUrl, host: "inferenceengine.vyro.ai", path: "/" + operation, protocol: "https:", headers: {"User-Agent": "okhttp/4.9.3", Connection: "Keep-Alive", "Accept-Encoding": "gzip"}},
-      function (err, res) {
-        if (err) reject(err);
-        const chunks = [];
-        res.on("data", function (chunk) {chunks.push(chunk)});
-        res.on("end", function () {resolve(Buffer.concat(chunks))});
-        res.on("error", function (err) {
-        reject(err);
-        });
-      },
-    )
-  })
+async function up(buffer) {
+  const form = new FormData()
+  form.append('reqtype', 'fileupload')
+  form.append('fileToUpload', buffer, 'image.jpg')
+
+  const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form })
+  const url = await res.text()
+
+  if (!url.startsWith('https://')) throw '❌ Falló la subida a Catbox.'
+  return url.trim()
 }
