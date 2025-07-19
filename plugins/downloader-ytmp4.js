@@ -50,7 +50,7 @@ await conn.sendMessage(m.chat, { react: { text: '🕒', key: m.key } })
 }
 
 handler.help = ['ytmp4'].map(v => v + ' < link>')
-handler.tags = ['descargas']
+handler.tags = ['downloader']
 handler.command = ['ytmp4']
 
 export default handler
