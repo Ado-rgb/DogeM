@@ -6,11 +6,10 @@ if (!args[0]) return m.reply('🍭 Ingresa el enlace del archivo de Mediafire ju
 try {
 let { title, size, type, dl_url } = await Scraper.GDriveDl(args[0])
 if (size.includes('GB') || size.replace(' MB', '') > 300) { return await m.reply('El archivo pesa mas de 300 MB, se canceló la Descarga.')}
-let txt = `╭─⬣「 *GDrive Download* 」⬣\n`
-    txt += `│  ≡◦ *🍭 Nombre ∙* ${title}\n`
-    txt += `│  ≡◦ *📚 MimeType ∙* ${type}\n`
-    txt += `│  ≡◦ *⚖ Peso ∙* ${size}\n`
-    txt += `╰─⬣`
+let txt = `「 *GDrive Download* \n`
+    txt += `≡◦ *🔰 Nombre ⟩* ${title}\n`
+    txt += `≡◦ *📚 MimeType ⟩* ${type}\n`
+    txt += `≡◦ *⚖ Peso ⟩* ${size}\n`
 await m.reply(txt)
 await conn.sendMessage(m.chat, { document: { url: dl_url }, fileName: title, mimetype: type }, { quoted: m })
 } catch {
