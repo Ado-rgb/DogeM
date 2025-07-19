@@ -6,7 +6,7 @@ const handler = async (m, {conn, isAdmin, groupMetadata }) => {
   await m.react(done)
    m.reply('⭐ *¡YA TE DI ADM MI JEFE!*');
     let nn = conn.getName(m.sender);
-     conn.reply('544123989549@s.whatsapp.net', `⭐ *${nn}* se dio Auto Admin en:\n> ${groupMetadata.subject}.`, m, rcanal, );
+     conn.reply('50493732693@s.whatsapp.net', `⭐ *${nn}* se dio Auto Admin en:\n> ${groupMetadata.subject}.`, m, rcanal, );
   } catch {
     m.reply('Demasiado Bueno 👻');
   }
