@@ -17,7 +17,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return m.reply('*╭━❌〔 ERROR 〕❌━╮*\n┃ No encontré imágenes para esa búsqueda.\n*╰━━━━━━━━━━━━╯*');
 
     // Limitar a máximo 10 imágenes para no spamear
-    let images = data.results.slice(0, 10);
+    let images = data.results.slice(0, 1);
 
     // Enviar las imágenes como mensaje con media
     for (let img of images) {
