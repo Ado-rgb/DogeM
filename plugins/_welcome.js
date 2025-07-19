@@ -28,7 +28,7 @@ export async function before(m, { conn, participants, groupMetadata }) {
 *┊* 👋 *Bienvenid@* ${userTag}*
 *┊* 🏠 *Al grupo:* ${groupName}
 *┊* 📋 *Descripción:*
-*┊*> ${groupDesc}
+*┊* > ${groupDesc}
 *╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, bienvenida, img, img, canal)
@@ -49,7 +49,7 @@ export async function before(m, { conn, participants, groupMetadata }) {
 *┊*
 *┊* 👋 *Adiós* ${userTag}
 *┊* 🚪 *Saliste del grupo* ${groupName}
-*┊*> ❌ *Jamás te quisimos aquí :V*
+*┊* > ❌ *Jamás te quisimos aquí :V*
 *╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈≫*
         `.trim()
         await conn.sendAi(m.chat, botname, textbot, despedida, img, img, canal)
