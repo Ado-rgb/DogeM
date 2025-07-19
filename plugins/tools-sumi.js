@@ -10,6 +10,15 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     const apiURL = `https://theadonix-api.vercel.app/api/adonix?q=${encodeURIComponent(text)}`;
     const res = await fetch(apiURL);
+
+    // Verifica que la respuesta sea JSON
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const textError = await res.text();
+      await m.react('❌');
+      return m.reply(`❌ La API devolvió un error:\n\n${textError}`);
+    }
+
     const data = await res.json();
 
     if (!data || data.status !== 200) {
@@ -17,7 +26,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return m.reply('❌ No se pudo procesar la respuesta de Adonix IA.');
     }
 
-    // Si devuelve imagen
     if (data.imagen_generada) {
       await conn.sendMessage(m.chat, {
         image: { url: data.imagen_generada },
@@ -27,7 +35,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return;
     }
 
-    // Si devuelve video
     if (data.video) {
       await conn.sendMessage(m.chat, {
         video: { url: data.video },
@@ -37,9 +44,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return;
     }
 
-    // Si devuelve texto
-    if (data.respuesta && typeof data.respuesta === 'string') {
-      const respuestaFinal = `🌵 *${data.ia}*\n\n${data.respuesta.trim()}`;
+    if (data.respuesta) {
+      const respuestaFinal = `🌵 *${data.ia}*\n\n${data.respuesta}`;
       await m.reply(respuestaFinal);
       await m.react('✅');
       return;
