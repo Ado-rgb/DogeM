@@ -30,6 +30,7 @@ const defaultMenu = {
 before: `
 *╭━━━〔 𝖨𝖭𝖥𝖮 〕━━━╮*
 ┃ *Hola* 👋 *%name*
+┃ *Soy* DOGE 🔥 
 ┃ 📅 *%week*, %date
 ┃ ⏰ *Hora »* %time
 ┃ ⚡ *Nivel »* %level | ⭐ *XP »* %totalexp
