@@ -43,7 +43,7 @@ let handler = async (m, { conn }) => {
     let buffer = Buffer.alloc(0);
     for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
 
-    const credit = "> ☔ ${packname}";
+    const credit = "> *🍁 DOGE BOT*";
     const opts = { mimetype: mediaMsg.mimetype };
 
     if (mediaType === "image") {
