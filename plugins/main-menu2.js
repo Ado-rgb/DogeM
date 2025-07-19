@@ -1,7 +1,7 @@
 let handler = async (m, { conn }) => {
 let img = 'https://d.uguu.se/HdtYFNHB.jpg'
 let texto = `
-*╭━━━〔 𝖬𝖤𝖭𝖴́ 𝖣𝖤 𝖠𝖴𝖣𝖨𝖮𝖲 𝖣𝖮𝖦𝖤 🗣️ 〕━━━╮*
+*╭━━〔 𝖬𝖤𝖭𝖴́ 𝖠𝖴𝖣𝖨𝖮𝖲 🗣️ 〕━━╮*
 ┃ *Hola* 👋 ${m.pushName || 'Usuario'}
 ┃ 🎶 *Audios Disponibles »* 52
 ┃ 📢 *Info:* Para utilizar pon *.on audios*
