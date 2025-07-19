@@ -1,4 +1,4 @@
-//Codígo de Sisked
+//Codígo de DOGE
 
 import fs from 'fs';
 import path from 'path';
