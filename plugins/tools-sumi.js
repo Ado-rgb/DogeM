@@ -12,31 +12,39 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const res = await fetch(apiURL);
     const data = await res.json();
 
+    if (!data || data.status !== 200) {
+      await m.react('❌');
+      return m.reply('❌ No se pudo procesar la respuesta de Adonix IA.');
+    }
+
     // Si devuelve imagen
     if (data.imagen_generada) {
       await conn.sendMessage(m.chat, {
         image: { url: data.imagen_generada },
-        caption: `🖼️ *Adonix IA* generó esta imagen:\n\n📌 _${data.pregunta}_\n${data.mensaje || ''}`,
+        caption: `🖼️ *${data.ia}*\n\n📌 _${data.pregunta}_\n${data.respuesta || ''}`,
       }, { quoted: m });
       await m.react('✅');
       return;
     }
 
-    // Si devuelve respuesta tipo texto
+    // Si devuelve video
+    if (data.video) {
+      await conn.sendMessage(m.chat, {
+        video: { url: data.video },
+        caption: `🎬 *${data.ia}*\n\n📌 _${data.pregunta}_\n${data.respuesta || ''}`,
+      }, { quoted: m });
+      await m.react('✅');
+      return;
+    }
+
+    // Si devuelve texto
     if (data.respuesta && typeof data.respuesta === 'string') {
-      const [mensaje, ...codigo] = data.respuesta.split(/```(?:javascript|js|html|)/i);
-      let respuestaFinal = `🌵 *Adonix IA :*\n\n${mensaje.trim()}`;
-
-      if (codigo.length > 0) {
-        respuestaFinal += `\n\n💻 *Código:*\n\`\`\`js\n${codigo.join('```').trim().slice(0, 3900)}\n\`\`\``;
-      }
-
+      const respuestaFinal = `🌵 *${data.ia}*\n\n${data.respuesta.trim()}`;
       await m.reply(respuestaFinal);
       await m.react('✅');
       return;
     }
 
-    // Si no trae ni imagen ni texto válido
     await m.react('❌');
     return m.reply('❌ No se pudo procesar la respuesta de Adonix IA.');
 
@@ -50,5 +58,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 handler.help = ['ia'];
 handler.tags = ['ia'];
 handler.command = ['adonix', 'ia', 'adonixia'];
-handler.register = true
+handler.register = true;
+
 export default handler;
