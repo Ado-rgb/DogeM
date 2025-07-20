@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!text) return m.reply(`🌤️ *Uso correcto:*\n${usedPrefix + command} <ciudad>\n\nEjemplo:\n${usedPrefix + command} Santa Rosa de Copan`)
+  if (!text) return m.reply(`🌤️ *Uso correcto:*\n${usedPrefix + command} <ciudad>\n\nEjemplo:\n${usedPrefix + command} Santa Rosa de lima`)
 
   try {
     let url = `https://api.nekorinn.my.id/info/weather?city=${encodeURIComponent(text)}`
