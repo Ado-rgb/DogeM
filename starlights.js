@@ -133,6 +133,12 @@ version: [2, 3000, 1023223821],
 
 global.conn = makeWASocket(connectionOptions);
 
+// --- INICIO DE DEPURACIÓN PARA AUTHFILE (Mantenido para referencia si lo necesitas) ---
+console.log('--- Depuración de authFile ---');
+console.log('Valor inicial de global.authFile:', global.authFile);
+console.log(`¿Existe la carpeta de autenticación (${global.authFile})?`, existsSync(global.authFile));
+// --- FIN DE DEPURACIÓN ---
+
 if (!existsSync(`./${authFile}/creds.json`)) {
 if (opcion === '2' || methodCode) {
 opcion = '2'
@@ -559,3 +565,57 @@ conn.ev.on('connection.update', async (update) => {
   }
   connectionUpdate(update); // Also call the original connectionUpdate for the main bot
 });
+
+
+// --- INICIO DEL CÓDIGO DEL COMANDO .bots (SOLO SUB-BOTS) ---
+import ws from 'ws'
+
+// Mover la función handler fuera del archivo principal para mantener la modularidad
+// Si este código está en su propio archivo (ej. `plugins/bots.js`), ya estaría bien.
+// Si está pegado en el archivo principal, es recomendable mantener los comandos en archivos separados.
+
+async function listSubBotsHandler(m, { conn: stars, usedPrefix }) {
+  let connectedSubBots = []
+
+  // Iterar solo sobre los sub-bots en global.conns
+  Object.values(global.conns).forEach((conn) => {
+    // Validar que la conexión exista, que el usuario esté definido
+    // y que el socket de WebSocket no esté en estado 'CLOSED' (cerrado)
+    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState !== ws.CLOSED) {
+      connectedSubBots.push(conn); // Añadir directamente el objeto de conexión
+    }
+  });
+
+  // Si no hay sub-bots conectados, enviar un mensaje específico
+  if (connectedSubBots.length === 0) {
+    let responseMessage = `*No hay sub-bots conectados en este momento.*`;
+    await stars.sendMessage(m.chat, { text: responseMessage }, { quoted: m });
+    return; // Salir de la función
+  }
+
+  // Generar el mensaje con la información de los sub-bots
+  let message = connectedSubBots.map((v, index) => {
+    const jid = v.user.jid.replace(/[^0-9]/g, ''); // Limpiar el JID para el número
+    const name = v.user.name || v.user.verifiedName || '-'; // Obtener el nombre del nombre
+    const botType = 'Sub-Bot'; // Ya sabemos que es un sub-bot
+
+    return `*${index + 1}.- ${botType}*\n*Número:* @${jid}\n*Link:* https://wa.me/${jid}\n*Nombre:* ${name}`;
+  }).join('\n\n');
+
+  let totalSubBots = connectedSubBots.length;
+  let responseMessage = `*Total de Sub-Bots Conectados* : ${totalSubBots}\n\n${message.trim()}`.trim();
+
+  await stars.sendMessage(m.chat, { text: responseMessage, mentions: stars.parseMention(responseMessage) }, { quoted: m });
+}
+
+// Asegúrate de que el handler esté exportado correctamente si este es un archivo de plugin
+// Si este código está en un archivo llamado, por ejemplo, `plugins/bots.js`
+// entonces la línea 'export default handler' al final es correcta.
+listSubBotsHandler.command = ['listjadibot', 'bots'];
+listSubBotsHandler.help = ['bots'];
+listSubBotsHandler.tags = ['serbot'];
+
+// Si este archivo es donde se definen los handlers, asegúrate de que se asigne correctamente.
+// Si ya tienes un sistema de plugins que importa archivos como este, entonces no necesitas esta asignación aquí.
+// Pero si lo estás pegando en tu archivo principal, asegúrate de que tu `handler` global pueda encontrar `listSubBotsHandler`.
+// Una forma común es que tu
