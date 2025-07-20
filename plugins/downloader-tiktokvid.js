@@ -14,7 +14,7 @@ try {
 }
 };
 
-handler.command = ['tiktokvid', 'ttvid'];
+handler.command = ['tiktokvid'];
 handler.help = ['tiktoksearch <texto>'];
 handler.diamantes = 1;
 export default handler;
