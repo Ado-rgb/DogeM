@@ -19,7 +19,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 };
 
 handler.help = ['videoai <texto>'];
-handler.tags = ['ai'];
+handler.tags = ['ia'];
 handler.command = /^videoai$/i;
 
 export default handler;
