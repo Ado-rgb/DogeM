@@ -6,8 +6,8 @@ import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
-import * as ws from 'ws' //  <-- ÚNICA IMPORTACIÓN DE WS AQUI
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // 'stat' es importante
+import * as ws from 'ws' // <-- ÚNICA Y PRINCIPAL IMPORTACIÓN DE WS AQUÍ
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs'
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -30,7 +30,7 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const {DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
-// const {CONNECTING} = ws // <-- NO NECESITAS ESTO, YA TIENES 'ws' COMPLETO ARRIBA
+// const {CONNECTING} = ws // <-- ESTA LÍNEA DEBE SER COMENTADA O ELIMINADA SI ws YA FUE IMPORTADO ARRIBA
 const {chain} = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
@@ -271,11 +271,11 @@ if (opcion == '1' || methodCodeQR) {
 let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
 if (reason == 405) {
 // Asegúrate de que connInstance.authFile es una cadena válida antes de usarla
-const authFilePath = connInstance.authFile && existsSync(connInstance.authFile) ? connInstance.authFile + "/creds.json" : "./sessions/creds.json";
+const authFilePath = (connInstance.authFile && existsSync(connInstance.authFile)) ? path.join(connInstance.authFile, "creds.json") : path.join(global.authFile, "creds.json");
 if (existsSync(authFilePath)) {
   await unlinkSync(authFilePath);
 }
-console.log(chalk.bold.redBright(`Conexión replazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
+console.log(chalk.bold.redBright(`Conexión reemplazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
 process.send('reset')}
 if (connection === 'close') {
     if (reason === DisconnectReason.badSession) {
@@ -304,7 +304,7 @@ process.on('uncaughtException', console.error)
 
 let isInit = true;
 let handler = await import('./handler.js')
-global.reloadHandler = async function(restatConn, connInstance = global.conn) { // Added connInstance parameter
+global.reloadHandler = async function(restatConn, connInstance = global.conn) {
   try {
     const Handler = await import(`./handler.js?update=${Date.now()}`).catch(console.error);
     if (Object.keys(Handler || {}).length) handler = Handler
@@ -312,17 +312,20 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
     console.error(e);
   }
   if (restatConn) {
-    const oldChats = connInstance.chats // Usa connInstance.chats
+    const oldChats = connInstance.chats
     try {
-      connInstance.ws.close() // Close the specific instance
+      connInstance.ws.close()
     } catch { }
     connInstance.ev.removeAllListeners()
 
-    // Asegúrate de que connInstance.authFile esté definido aquí.
     const authPath = connInstance.authFile || global.authFile;
+    if (!authPath) {
+      console.error(chalk.red(`Error: No se pudo determinar la ruta de autenticación para la instancia. Abortando reconexión.`));
+      return; // Abort if authPath is still undefined
+    }
 
     const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(authPath);
-    connInstance = makeWASocket({ // Recreate the specific instance
+    connInstance = makeWASocket({
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         mobile: MethodMobile,
@@ -344,12 +347,12 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
         version: [2, 3000, 1023223821],
     }, {chats: oldChats})
 
-    connInstance.authFile = authPath; // Vuelve a asignar la ruta de authFile a la nueva instancia
+    connInstance.authFile = authPath;
 
     if (connInstance === global.conn) {
         global.conn = connInstance;
     } else {
-        const subBotId = path.basename(authPath); // Obtiene el nombre de la carpeta (ID de sesión)
+        const subBotId = path.basename(authPath);
         global.conns[subBotId] = connInstance;
     }
     isInit = true
@@ -379,13 +382,12 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
   return true
 };
 
-const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins
+const pluginFolder = global.__dirname(join(__dirname, './plugins'))
 const pluginFilter = (filename) => /\.js$/.test(filename)
 global.plugins = {}
 async function filesInit() {
-  // Asegúrate de que la carpeta 'plugins' exista antes de leerla
   if (!existsSync(pluginFolder)) {
-    console.error(chalk.red(`Error: La carpeta de plugins '${pluginFolder}' no existe. Por favor, créala.`));
+    console.error(chalk.red(`Error: La carpeta de plugins '${pluginFolder}' no existe. Por favor, créala en la raíz de tu bot.`));
     return;
   }
   for (const filename of readdirSync(pluginFolder).filter(pluginFilter)) {
@@ -394,7 +396,7 @@ async function filesInit() {
       const module = await import(file)
       global.plugins[filename] = module.default || module
     } catch (e) {
-      conn.logger.error(e)
+      console.error(chalk.red(`Error al cargar el plugin '${filename}': ${e.message}`));
       delete global.plugins[filename]
     }
   }
@@ -476,7 +478,6 @@ _quickTest().catch(console.error)
 async function isValidPhoneNumber(number) {
 try {
 number = number.replace(/\s+/g, '')
-// Si el número empieza con '+521' o '+52 1', quitar el '1'
 if (number.startsWith('+521')) {
 number = number.replace('+521', '+52');
 } else if (number.startsWith('+52') && number[4] === '1') {
@@ -488,7 +489,6 @@ return phoneUtil.isValidNumber(parsedNumber)
 return false
 }}
 
-// Function to initialize and connect a sub-bot
 async function connectSubBot(sessionId) {
   const authFolderPath = `./serbot/${sessionId}`;
   if (!existsSync(authFolderPath)) {
@@ -504,7 +504,7 @@ async function connectSubBot(sessionId) {
 
   const subConnectionOptions = {
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: false, // Sub-bots don't need to print QR in terminal
+    printQRInTerminal: false,
     mobile: MethodMobile,
     browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
     auth: {
@@ -525,7 +525,7 @@ async function connectSubBot(sessionId) {
   };
 
   const subConn = makeWASocket(subConnectionOptions);
-  subConn.authFile = authFolderPath; // Store the auth file path for the sub-bot
+  subConn.authFile = authFolderPath;
 
   subConn.handler = handler.handler.bind(subConn);
   subConn.connectionUpdate = (update) => connectionUpdate(update, subConn);
@@ -539,7 +539,6 @@ async function connectSubBot(sessionId) {
   return subConn;
 }
 
-// Function to load all sub-bots
 async function loadSubBots() {
   const serbotDir = './serbot';
   if (!existsSync(serbotDir)) {
@@ -563,12 +562,11 @@ async function loadSubBots() {
   console.log(chalk.cyan(`Finished loading ${Object.keys(global.conns).length} sub-bots.`));
 }
 
-// Call loadSubBots after the main bot connection is established
 conn.ev.on('connection.update', async (update) => {
   if (update.connection === 'open' && !conn.isSubBotsLoaded) {
     console.log(chalk.bold.green('Main bot connected. Loading sub-bots...'));
     await loadSubBots();
-    conn.isSubBotsLoaded = true; // Prevent multiple loadings
+    conn.isSubBotsLoaded = true;
   }
   connectionUpdate(update, global.conn);
 });
