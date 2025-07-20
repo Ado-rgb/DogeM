@@ -114,7 +114,7 @@ handler.help = [
     'makingneon *<texto>*', 'royaltext *<texto>*', 'freecreate *<texto>*', 'galaxystyle *<texto>*', 'amongustext *<texto>*', 'rainytext *<texto>*', 
     'graffititext *<texto>*', 'colorfulltext *<texto>*', 'equalizertext *<texto>*', 'narutotext *<texto>*', 'angeltxt *<texto>*', 'starlight *<texto>*'
 ];
-handler.tags = ['tools'];
+handler.tags = ['logo'];
 handler.command = [
     'glitchtext', 'writetext', 'advancedglow', 'typographytext', 'pixelglitch', 
     'neonglitch', 'flagtext', 'flag3dtext', 'deletingtext', 'blackpinkstyle', 
