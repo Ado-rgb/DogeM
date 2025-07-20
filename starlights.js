@@ -1,13 +1,13 @@
 // index.js
 
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
+Process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
 import './config.js'
 import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
-import * as ws from 'ws' // <-- Esta es la importación correcta y ÚNICA de ws
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs'
+import * as ws from 'ws' // Esta es la importación correcta y ÚNICA de ws
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // Añadido 'stat' de nuevo
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -30,7 +30,7 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const {DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
-const {CONNECTING} = ws // <-- Esto usa la importación de ws de arriba
+const {CONNECTING} = ws
 const {chain} = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
@@ -269,7 +269,7 @@ if (opcion == '1' || methodCodeQR) {
   }
 let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
 if (reason == 405) {
-await unlinkSync(connInstance.authFile + "/creds.json") // Use connInstance.authFile
+await unlinkSync(connInstance.authFile + "/creds.json") // Usa connInstance.authFile
 console.log(chalk.bold.redBright(`Conexión replazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
 process.send('reset')}
 if (connection === 'close') {
@@ -287,9 +287,6 @@ if (connection === 'close') {
         connInstance.logger.error(`Conexion cerrada, por favor elimina la carpeta ${connInstance.authFile} y escanea nuevamente.`)
     } else if (reason === DisconnectReason.restartRequired) {
         connInstance.logger.info(`Reinicio necesario, reinicie el servidor si presenta algún problema.`)
-        await global.reloadHandler(true, connInstance).catch(console.error)
-    } else if (reason === DisconnectReason.timedOut) {
-        connInstance.logger.warn(`Tiempo de conexión agotado, reconectando...`)
         await global.reloadHandler(true, connInstance).catch(console.error)
     } else {
         connInstance.logger.warn(`Razón de desconexión desconocida. ${reason || ''}: ${connection || ''}`)
@@ -310,12 +307,13 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
     console.error(e);
   }
   if (restatConn) {
-    const oldChats = connInstance.chats // Use connInstance.chats
+    const oldChats = connInstance.chats // Usa connInstance.chats
     try {
       connInstance.ws.close() // Close the specific instance
     } catch { }
     connInstance.ev.removeAllListeners()
-    const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(connInstance.authFile); // Use connInstance.authFile
+    // Usa connInstance.authFile aquí
+    const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(connInstance.authFile);
     connInstance = makeWASocket({ // Recreate the specific instance
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false, // QR should only be for initial setup
@@ -341,15 +339,16 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
     if (connInstance === global.conn) { // Update global.conn if it's the main instance
         global.conn = connInstance;
     } else { // Update the specific sub-bot in global.conns
-        const subBotId = connInstance.authFile.split('/')[1]; // Extract ID from path
+        // Ajusta el índice si la ruta cambia (ej. './serbot/ID/creds.json' -> id estaría en índice 2)
+        const subBotId = connInstance.authFile.split('/').pop(); // Obtiene el último elemento de la ruta (el ID de la sesión)
         global.conns[subBotId] = connInstance;
     }
     isInit = true
   }
   if (!isInit) {
-    connInstance.ev.off('messages.upsert', connInstance.handler) // Use connInstance.handler
-    connInstance.ev.off('connection.update', connInstance.connectionUpdate) // Use connInstance.connectionUpdate
-    connInstance.ev.off('creds.update', connInstance.credsUpdate) // Use connInstance.credsUpdate
+    connInstance.ev.off('messages.upsert', connInstance.handler) // Usa connInstance.handler
+    connInstance.ev.off('connection.update', connInstance.connectionUpdate) // Usa connInstance.connectionUpdate
+    connInstance.ev.off('creds.update', connInstance.credsUpdate) // Usa connInstance.credsUpdate
   }
 
   connInstance.handler = handler.handler.bind(connInstance) // Bind to specific instance
@@ -371,7 +370,7 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
   return true
 };
 
-const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins
+const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins (sin '/index' si no existe)
 const pluginFilter = (filename) => /\.js$/.test(filename)
 global.plugins = {}
 async function filesInit() {
@@ -557,59 +556,7 @@ conn.ev.on('connection.update', async (update) => {
     await loadSubBots();
     conn.isSubBotsLoaded = true; // Prevent multiple loadings
   }
-  connectionUpdate(update); // Also call the original connectionUpdate for the main bot
+  // También llama a la función connectionUpdate general para el bot principal
+  // ya que este listener es solo para el bot principal.
+  connectionUpdate(update, global.conn);
 });
-
-// --- INICIO DEL CÓDIGO DEL COMANDO .bots (SOLO SUB-BOTS) ---
-// NOTA: Si este código está en su propio archivo de plugin (ej. 'plugins/bots.js'),
-// NO necesitas las dos últimas líneas (listSubBotsHandler.command y export default listSubBotsHandler)
-// en este archivo index.js. Solo en el archivo de plugin.
-// Si lo dejas aquí, asegúrate de que tu `handler.js` principal lo importe o lo reconozca.
-
-async function listSubBotsHandler(m, { conn: stars, usedPrefix }) {
-  let connectedSubBots = []
-
-  // Iterar solo sobre los sub-bots en global.conns
-  Object.values(global.conns).forEach((conn) => {
-    // Validar que la conexión exista, que el usuario esté definido
-    // y que el socket de WebSocket no esté en estado 'CLOSED' (cerrado)
-    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState !== ws.CLOSED) {
-      connectedSubBots.push(conn); // Añadir directamente el objeto de conexión
-    }
-  });
-
-  // Si no hay sub-bots conectados, enviar un mensaje específico
-  if (connectedSubBots.length === 0) {
-    let responseMessage = `*No hay sub-bots conectados en este momento.*`;
-    await stars.sendMessage(m.chat, { text: responseMessage }, { quoted: m });
-    return; // Salir de la función
-  }
-
-  // Generar el mensaje con la información de los sub-bots
-  let message = connectedSubBots.map((v, index) => {
-    const jid = v.user.jid.replace(/[^0-9]/g, ''); // Limpiar el JID para el número
-    const name = v.user.name || v.user.verifiedName || '-'; // Obtener el nombre del nombre
-    const botType = 'Sub-Bot'; // Ya sabemos que es un sub-bot
-
-    return `*${index + 1}.- ${botType}*\n*Número:* @${jid}\n*Link:* https://wa.me/${jid}\n*Nombre:* ${name}`;
-  }).join('\n\n');
-
-  let totalSubBots = connectedSubBots.length;
-  let responseMessage = `*Total de Sub-Bots Conectados* : ${totalSubBots}\n\n${message.trim()}`.trim();
-
-  await stars.sendMessage(m.chat, { text: responseMessage, mentions: stars.parseMention(responseMessage) }, { quoted: m });
-}
-
-// Estas líneas son para que el handler sea reconocido.
-// Si este código del comando está en un archivo separado dentro de 'plugins/',
-// entonces estas líneas irían al final de ese archivo de plugin, NO en index.js.
-// Si lo dejas aquí en index.js, tu handler principal deberá ser capaz de encontrarlo.
-// Una forma común es que el handler principal tenga una lógica para "ejecutar" funciones
-// directamente si un comando coincide con el nombre de una función definida.
-global.plugins['listjadibot.js'] = { default: listSubBotsHandler }; // Asegúrate de que este nombre de archivo no colisione
-                                                                   // y que tu sistema de plugins lo reconozca.
-listSubBotsHandler.command = ['listjadibot', 'bots'];
-listSubBotsHandler.help = ['bots'];
-listSubBotsHandler.tags = ['serbot'];
-
-// --- FIN DEL CÓDIGO DEL COMANDO .bots ---
