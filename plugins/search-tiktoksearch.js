@@ -1,9 +1,11 @@
+import baileys from '@whiskeysockets/baileys'
 import axios from 'axios'
-import {
+
+const {
   proto,
   generateWAMessageFromContent,
   generateWAMessageContent
-} from '@whiskeysockets/baileys'
+} = baileys
 
 const handler = async (m, { conn, text }) => {
   if (!text) return conn.reply(m.chat, '🍭Ingresa ch *<txt>*', m)
