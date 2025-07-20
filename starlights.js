@@ -1,11 +1,11 @@
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
+Process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
 import './config.js'
 import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
 import * as ws from 'ws'
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch} from 'fs'
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // Added 'stat'
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -56,7 +56,7 @@ global.prefix = new RegExp('^[' + (opts['prefix'] || '‎z/#$%.\\-').replace(/[|
 
 global.db = new Low(/https?:\/\//.test(opts['db'] || '') ? new cloudDBAdapter(opts['db']) : new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`));
 
-global.DATABASE = global.db 
+global.DATABASE = global.db
 global.loadDatabase = async function loadDatabase() {
   if (global.db.READ) return new Promise((resolve) => setInterval(async function () {
     if (!global.db.READ) {
@@ -98,28 +98,28 @@ let opcion
 if (methodCodeQR) {
 opcion = '1'
 }
-if (!methodCodeQR && !methodCode && !fs.existsSync(`./${authFile}/creds.json`)) {
+if (!methodCodeQR && !methodCode && !existsSync(`./${authFile}/creds.json`)) {
 do {
 let lineM = '⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ 》'
 opcion = await question('Seleccione una opción:\n1. Con código QR\n2. Con código de texto de 8 dígitos\n---> ')
 
 if (!/^[1-2]$/.test(opcion)) {
 console.log('Por favor, seleccione solo 1 o 2.\n')
-}} while (opcion !== '1' && opcion !== '2' || fs.existsSync(`./${authFile}/creds.json`))
+}} while (opcion !== '1' && opcion !== '2' || existsSync(`./${authFile}/creds.json`))
 }
 
-console.info = () => {} 
+console.info = () => {}
 const connectionOptions = {
 logger: pino({ level: 'silent' }),
 printQRInTerminal: opcion == '1' ? true : methodCodeQR ? true : false,
-mobile: MethodMobile, 
+mobile: MethodMobile,
 browser: opcion == '1' ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : methodCodeQR ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : ['Ubuntu', 'Chrome', '110.0.5585.95'],
 auth: {
 creds: state.creds,
 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
 },
-markOnlineOnConnect: true, 
-generateHighQualityLinkPreview: true, 
+markOnlineOnConnect: true,
+generateHighQualityLinkPreview: true,
 getMessage: async (clave) => {
 let jid = jidNormalizedUser(clave.remoteJid)
 let msg = await store.loadMessage(jid, clave.id)
@@ -127,13 +127,13 @@ return msg?.message || ""
 },
 msgRetryCounterCache,
 msgRetryCounterMap,
-defaultQueryTimeoutMs: undefined,   
+defaultQueryTimeoutMs: undefined,
 version: [2, 3000, 1023223821],
 }
 
 global.conn = makeWASocket(connectionOptions);
 
-if (!fs.existsSync(`./${authFile}/creds.json`)) {
+if (!existsSync(`./${authFile}/creds.json`)) {
 if (opcion === '2' || methodCode) {
 opcion = '2'
 if (!conn.authState.creds.registered) {
@@ -156,7 +156,7 @@ const PHONENUMBER_MCC = {
   "506": "CR", "507": "PA", "504": "HN", "505": "NI", "502": "GT", "503": "SV",
   "1": "US"
  }
-   
+
 setTimeout(async () => {
 let codigo = await conn.requestPairingCode(addNumber)
 codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo
@@ -173,7 +173,7 @@ if (!opts['test']) {
   if (global.db) {
     setInterval(async () => {
       if (global.db.data) await global.db.write();
-      if (opts['autocleartmp'] && (global.support || {}).find) (tmp = [os.tmpdir(), 'tmp', 'serbot'], tmp.forEach((filename) => cp.spawn('find', [filename, '-amin', '3', '-type', 'f', '-delete'])));
+      if (opts['autocleartmp'] && (global.support || {}).find) (tmp = [tmpdir(), 'tmp', 'serbot'], tmp.forEach((filename) => spawn('find', [filename, '-amin', '3', '-type', 'f', '-delete'])));
     }, 30 * 1000);
   }
 }
@@ -201,7 +201,7 @@ prekey = [...prekey, ...filesFolderPreKeys]
 filesFolderPreKeys.forEach(files => {
 unlinkSync(`./sessions/${files}`)
 })
-} 
+}
 
 function purgeSessionSB() {
 try {
@@ -233,24 +233,31 @@ files.forEach(file => {
 const filePath = path.join(dir, file)
 stat(filePath, (err, stats) => {
 if (err) throw err;
-if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json') { 
-unlinkSync(filePath, err => {  
+if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json') {
+unlinkSync(filePath, err => {
 if (err) throw err
 console.log(chalk.bold.green(`Archivo ${file} borrado con éxito`))
 })
-} else {  
+} else {
 console.log(chalk.bold.red(`Archivo ${file} no borrado` + err))
 } }) }) }) })
 }
 
-async function connectionUpdate(update) {
+// Add global.conns to store sub-bot connections
+global.conns = {}
+
+async function connectionUpdate(update, connInstance = global.conn) {
   const {connection, lastDisconnect, isNewLogin} = update;
-  global.stopped = connection;
-  if (isNewLogin) conn.isInit = true;
+  if (connInstance === global.conn) { // Only update global.stopped for the main connection
+    global.stopped = connection;
+  }
+  if (isNewLogin) connInstance.isInit = true;
   const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
-  if (code && code !== DisconnectReason.loggedOut && conn?.ws.socket == null) {
-    await global.reloadHandler(true).catch(console.error);
-    global.timestamp.connect = new Date;
+  if (code && code !== DisconnectReason.loggedOut && connInstance?.ws.socket == null) {
+    await global.reloadHandler(true, connInstance).catch(console.error); // Pass connInstance
+    if (connInstance === global.conn) {
+      global.timestamp.connect = new Date;
+    }
   }
   if (global.db.data == null) loadDatabase();
 if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
@@ -258,35 +265,35 @@ if (opcion == '1' || methodCodeQR) {
     console.log(chalk.yellow('Escanea el código QR.'));
  }}
   if (connection == 'open') {
-    console.log(chalk.yellow('Conectado correctamente.'));
+    console.log(chalk.yellow(`Conectado correctamente ${connInstance === global.conn ? 'principal' : 'sub-bot'}.`));
   }
 let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
 if (reason == 405) {
-await fs.unlinkSync("./sessions/" + "creds.json")
-console.log(chalk.bold.redBright(`Conexión replazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`)) 
+await unlinkSync(connInstance.authFile + "/creds.json") // Use connInstance.authFile
+console.log(chalk.bold.redBright(`Conexión replazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
 process.send('reset')}
 if (connection === 'close') {
     if (reason === DisconnectReason.badSession) {
-        conn.logger.error(`Sesión incorrecta, por favor elimina la carpeta ${global.authFile} y escanea nuevamente.`)
+        connInstance.logger.error(`Sesión incorrecta, por favor elimina la carpeta ${connInstance.authFile} y escanea nuevamente.`)
     } else if (reason === DisconnectReason.connectionClosed) {
-        conn.logger.warn(`Conexión cerrada, reconectando...`)
-        await global.reloadHandler(true).catch(console.error)
+        connInstance.logger.warn(`Conexión cerrada, reconectando...`)
+        await global.reloadHandler(true, connInstance).catch(console.error)
     } else if (reason === DisconnectReason.connectionLost) {
-        conn.logger.warn(`Conexión perdida con el servidor, reconectando...`)
-        await global.reloadHandler(true).catch(console.error)
+        connInstance.logger.warn(`Conexión perdida con el servidor, reconectando...`)
+        await global.reloadHandler(true, connInstance).catch(console.error)
     } else if (reason === DisconnectReason.connectionReplaced) {
-        conn.logger.error(`Conexión reemplazada, se ha abierto otra nueva sesión. Por favor, cierra la sesión actual primero.`)
+        connInstance.logger.error(`Conexión reemplazada, se ha abierto otra nueva sesión. Por favor, cierra la sesión actual primero.`)
     } else if (reason === DisconnectReason.loggedOut) {
-        conn.logger.error(`Conexion cerrada, por favor elimina la carpeta ${global.authFile} y escanea nuevamente.`)
+        connInstance.logger.error(`Conexion cerrada, por favor elimina la carpeta ${connInstance.authFile} y escanea nuevamente.`)
     } else if (reason === DisconnectReason.restartRequired) {
-        conn.logger.info(`Reinicio necesario, reinicie el servidor si presenta algún problema.`)
-        await global.reloadHandler(true).catch(console.error)
+        connInstance.logger.info(`Reinicio necesario, reinicie el servidor si presenta algún problema.`)
+        await global.reloadHandler(true, connInstance).catch(console.error)
     } else if (reason === DisconnectReason.timedOut) {
-        conn.logger.warn(`Tiempo de conexión agotado, reconectando...`)
-        await global.reloadHandler(true).catch(console.error)
+        connInstance.logger.warn(`Tiempo de conexión agotado, reconectando...`)
+        await global.reloadHandler(true, connInstance).catch(console.error)
     } else {
-        conn.logger.warn(`Razón de desconexión desconocida. ${reason || ''}: ${connection || ''}`)
-        await global.reloadHandler(true).catch(console.error)
+        connInstance.logger.warn(`Razón de desconexión desconocida. ${reason || ''}: ${connection || ''}`)
+        await global.reloadHandler(true, connInstance).catch(console.error)
     }
 }
 }
@@ -295,7 +302,7 @@ process.on('uncaughtException', console.error)
 
 let isInit = true;
 let handler = await import('./handler.js')
-global.reloadHandler = async function(restatConn) {
+global.reloadHandler = async function(restatConn, connInstance = global.conn) { // Added connInstance parameter
   try {
     const Handler = await import(`./handler.js?update=${Date.now()}`).catch(console.error);
     if (Object.keys(Handler || {}).length) handler = Handler
@@ -303,35 +310,63 @@ global.reloadHandler = async function(restatConn) {
     console.error(e);
   }
   if (restatConn) {
-    const oldChats = global.conn.chats
+    const oldChats = connInstance.chats // Use connInstance.chats
     try {
-      global.conn.ws.close()
+      connInstance.ws.close() // Close the specific instance
     } catch { }
-    conn.ev.removeAllListeners()
-    global.conn = makeWASocket(connectionOptions, {chats: oldChats})
+    connInstance.ev.removeAllListeners()
+    const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(connInstance.authFile); // Use connInstance.authFile
+    connInstance = makeWASocket({ // Recreate the specific instance
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false, // QR should only be for initial setup
+        mobile: MethodMobile,
+        browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
+        auth: {
+            creds: newState.creds,
+            keys: makeCacheableSignalKeyStore(newState.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+        },
+        markOnlineOnConnect: true,
+        generateHighQualityLinkPreview: true,
+        getMessage: async (clave) => {
+            let jid = jidNormalizedUser(clave.remoteJid)
+            let msg = await store.loadMessage(jid, clave.id)
+            return msg?.message || ""
+        },
+        msgRetryCounterCache,
+        msgRetryCounterMap,
+        defaultQueryTimeoutMs: undefined,
+        version: [2, 3000, 1023223821],
+    }, {chats: oldChats})
+
+    if (connInstance === global.conn) { // Update global.conn if it's the main instance
+        global.conn = connInstance;
+    } else { // Update the specific sub-bot in global.conns
+        const subBotId = connInstance.authFile.split('/')[1]; // Extract ID from path
+        global.conns[subBotId] = connInstance;
+    }
     isInit = true
   }
   if (!isInit) {
-    conn.ev.off('messages.upsert', conn.handler)
-    conn.ev.off('connection.update', conn.connectionUpdate)
-    conn.ev.off('creds.update', conn.credsUpdate)
+    connInstance.ev.off('messages.upsert', connInstance.handler) // Use connInstance.handler
+    connInstance.ev.off('connection.update', connInstance.connectionUpdate) // Use connInstance.connectionUpdate
+    connInstance.ev.off('creds.update', connInstance.credsUpdate) // Use connInstance.credsUpdate
   }
 
-  conn.handler = handler.handler.bind(global.conn)
-  conn.connectionUpdate = connectionUpdate.bind(global.conn)
-  conn.credsUpdate = saveCreds.bind(global.conn, true)
+  connInstance.handler = handler.handler.bind(connInstance) // Bind to specific instance
+  connInstance.connectionUpdate = (update) => connectionUpdate(update, connInstance); // Bind connectionUpdate with specific instance
+  connInstance.credsUpdate = saveCreds.bind(connInstance, true) // Bind to specific instance
 
   const currentDateTime = new Date()
-  const messageDateTime = new Date(conn.ev)
+  const messageDateTime = new Date(connInstance.ev)
   if (currentDateTime >= messageDateTime) {
-    const chats = Object.entries(conn.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
+    const chats = Object.entries(connInstance.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
   } else {
-    const chats = Object.entries(conn.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
+    const chats = Object.entries(connInstance.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
   }
 
-  conn.ev.on('messages.upsert', conn.handler)
-  conn.ev.on('connection.update', conn.connectionUpdate)
-  conn.ev.on('creds.update', conn.credsUpdate)
+  connInstance.ev.on('messages.upsert', connInstance.handler)
+  connInstance.ev.on('connection.update', connInstance.connectionUpdate)
+  connInstance.ev.on('creds.update', connInstance.credsUpdate)
   isInit = false
   return true
 };
@@ -439,3 +474,88 @@ return phoneUtil.isValidNumber(parsedNumber)
 } catch (error) {
 return false
 }}
+
+// Function to initialize and connect a sub-bot
+async function connectSubBot(sessionId) {
+  const authFolderPath = `./serbot/${sessionId}`;
+  if (!existsSync(authFolderPath)) {
+    console.warn(chalk.yellow(`Skipping sub-bot '${sessionId}': Session folder not found.`));
+    return null;
+  }
+  if (!existsSync(path.join(authFolderPath, 'creds.json'))) {
+    console.warn(chalk.yellow(`Skipping sub-bot '${sessionId}': creds.json not found.`));
+    return null;
+  }
+
+  const { state, saveState, saveCreds } = await useMultiFileAuthState(authFolderPath);
+
+  const subConnectionOptions = {
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false, // Sub-bots don't need to print QR in terminal
+    mobile: MethodMobile,
+    browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+    },
+    markOnlineOnConnect: true,
+    generateHighQualityLinkPreview: true,
+    getMessage: async (clave) => {
+      let jid = jidNormalizedUser(clave.remoteJid)
+      let msg = await store.loadMessage(jid, clave.id)
+      return msg?.message || ""
+    },
+    msgRetryCounterCache,
+    msgRetryCounterMap,
+    defaultQueryTimeoutMs: undefined,
+    version: [2, 3000, 1023223821],
+  };
+
+  const subConn = makeWASocket(subConnectionOptions);
+  subConn.authFile = authFolderPath; // Store the auth file path for the sub-bot
+
+  subConn.handler = handler.handler.bind(subConn);
+  subConn.connectionUpdate = (update) => connectionUpdate(update, subConn); // Pass subConn to connectionUpdate
+  subConn.credsUpdate = saveCreds.bind(subConn, true);
+
+  subConn.ev.on('messages.upsert', subConn.handler);
+  subConn.ev.on('connection.update', subConn.connectionUpdate);
+  subConn.ev.on('creds.update', subConn.credsUpdate);
+
+  console.log(chalk.blue(`Attempting to connect sub-bot: ${sessionId}`));
+  return subConn;
+}
+
+// Function to load all sub-bots
+async function loadSubBots() {
+  const serbotDir = './serbot';
+  if (!existsSync(serbotDir)) {
+    console.log(chalk.yellow('No "serbot" directory found. Skipping sub-bot loading.'));
+    return;
+  }
+
+  const subBotFolders = readdirSync(serbotDir).filter(item => {
+    const itemPath = join(serbotDir, item);
+    return statSync(itemPath).isDirectory() && existsSync(join(itemPath, 'creds.json'));
+  });
+
+  for (const folder of subBotFolders) {
+    console.log(chalk.magenta(`Found sub-bot session: ${folder}`));
+    const subConn = await connectSubBot(folder);
+    if (subConn) {
+      global.conns[folder] = subConn;
+      console.log(chalk.green(`Sub-bot '${folder}' added to global.conns.`));
+    }
+  }
+  console.log(chalk.cyan(`Finished loading ${Object.keys(global.conns).length} sub-bots.`));
+}
+
+// Call loadSubBots after the main bot connection is established
+conn.ev.on('connection.update', async (update) => {
+  if (update.connection === 'open' && !conn.isSubBotsLoaded) {
+    console.log(chalk.bold.green('Main bot connected. Loading sub-bots...'));
+    await loadSubBots();
+    conn.isSubBotsLoaded = true; // Prevent multiple loadings
+  }
+  connectionUpdate(update); // Also call the original connectionUpdate for the main bot
+});
