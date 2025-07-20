@@ -31,7 +31,7 @@ before: `
 *╭━━━〔 𝖨𝖭𝖥𝖮 〕━━━╮*
 ┃ *Hola* 👋 *%name*
 ┃ *Soy* DOGE 🔥 
-┃  %bottype
+┃ %bottype
 ┃ 📅 *%week*, %date
 ┃ ⏰ *Hora »* %time
 ┃ ⚡ *Nivel »* %level | ⭐ *XP »* %totalexp
@@ -51,7 +51,7 @@ after: '\n\n*┗ 𝖯𝗈𝗐𝖾𝗋𝖾𝖽 𝖡𝗒 𝖠𝖽𝗈 ┛*'
 let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
   try {
     // Detectar si es bot principal o sub-bot
-    let isPrincipal = conn.user?.id === '50494547493@s.whatsapp.net'
+    let isPrincipal = (conn.user?.id || '').split(':')[0].replace(/\D/g, '') === '50494547493'
     let botType = isPrincipal ? '🔰 Bot Principal' : '👾 Sub Bot'
 
     let _package = JSON.parse(await promises.readFile(join(__dirname, '../package.json')).catch(() => ({}))) || {}
