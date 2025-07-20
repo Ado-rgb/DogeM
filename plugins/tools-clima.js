@@ -29,7 +29,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         externalAdReply: {
           title: `Clima en ${loc.name}`,
           body: `Condición: ${cur.condition.text}`,
-          thumbnailUrl: cur.condition.iconUrl,
+          thumbnailUrl: "https://n.uguu.se/fWGkvhGH.jpg",
           mediaType: 1,
           renderLargerThumbnail: true,
           sourceUrl: `https://www.google.com/search?q=clima+${encodeURIComponent(loc.name)}`
@@ -44,7 +44,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 }
 
 handler.help = ['clima <ciudad>']
-handler.tags = ['tools']
+handler.tags = ['herramientas']
 handler.command = /^clima$/i
 
 export default handler
