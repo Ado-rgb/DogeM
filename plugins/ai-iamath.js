@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'
 
 let handler = async (m, { conn, text }) => {
-  if (!text) return conn.reply(m.chat, `*${xia} Por favor, ingresa una expresión matemática para resolver.*`, m)
+  if (!text) return conn.reply(m.chat, `*Por favor, ingresa una expresión matemática para resolver.*`, m)
   try {
     conn.sendPresenceUpdate('composing', m.chat) // Writing
     const url = `https://api.nekorinn.my.id/ai/aimath?text=${encodeURIComponent(text)}`
