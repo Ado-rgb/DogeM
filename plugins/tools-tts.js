@@ -4,7 +4,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (!text) return m.reply(`*Uso correcto:* ${usedPrefix + command} Tu texto`);
 
     try {
-        let url = `https://api.nekorinn.my.id/tools/openai-tts?text=${encodeURIComponent(text)}&voice=alloy`;
+        let url = `https://api.nekorinn.my.id/tools/openai-tts?text=${encodeURIComponent(text)}&voice=nova`;
         let res = await fetch(url);
 
         if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
