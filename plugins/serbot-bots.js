@@ -1,34 +1,39 @@
-import ws from 'ws' // Ya lo tienes, solo para asegurarnos
+import ws from 'ws'
 
 async function handler(m, { conn: stars, usedPrefix }) {
-  let uniqueUsers = new Map()
+  let connectedBots = []
 
-  // Iterar sobre las propiedades del objeto global.conns
-  // Object.values() nos da un array con todos los objetos de conexión de los sub-bots
-  Object.values(global.conns).forEach((conn) => {
-    // Validar que la conexión exista, que el usuario esté definido (es decir, que haya iniciado sesión)
-    // y que el socket de WebSocket no esté en estado 'CLOSED' (cerrado)
-    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState !== ws.CLOSED) {
-      uniqueUsers.set(conn.user.jid, conn)
-    }
-  })
-
-  // Añadir también el bot principal si está conectado
+  // 1. Añadir el bot principal a la lista si está activo
   if (stars.user && stars.ws.socket && stars.ws.socket.readyState !== ws.CLOSED) {
-    uniqueUsers.set(stars.user.jid, stars)
+    connectedBots.push({
+      type: 'main', // Identificador para el bot principal
+      conn: stars // La conexión del bot principal
+    });
   }
 
-  let users = [...uniqueUsers.values()] // Convertir el Map a un array de conexiones activas
+  // 2. Iterar sobre los sub-bots en global.conns
+  // Object.values() nos da un array con todos los objetos de conexión de los sub-bots
+  Object.values(global.conns).forEach((conn) => {
+    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState !== ws.CLOSED) {
+      connectedBots.push({
+        type: 'sub', // Identificador para los sub-bots
+        conn: conn // La conexión del sub-bot
+      });
+    }
+  });
 
-  let message = users.map((v, index) => {
+  let message = connectedBots.map((item, index) => {
+    const v = item.conn; // Obtenemos el objeto de conexión
     const jid = v.user.jid.replace(/[^0-9]/g, ''); // Limpiar el JID para el número
     const name = v.user.name || v.user.verifiedName || '-'; // Obtener el nombre del usuario
-    return `*${index + 1}.-* @${jid}\n*Link:* https://wa.me/${jid}\n*Nombre:* ${name}`;
+    const botType = item.type === 'main' ? 'Principal' : 'Sub-Bot'; // Definir el tipo de bot
+
+    return `*${index + 1}.- ${botType}*\n*Número:* @${jid}\n*Link:* https://wa.me/${jid}\n*Nombre:* ${name}`;
   }).join('\n\n');
 
   let replyMessage = message.length === 0 ? 'No hay bots conectados.' : message;
-  let totalUsers = users.length;
-  let responseMessage = `*Total de Bots* : ${totalUsers}\n\n${replyMessage.trim()}`.trim();
+  let totalUsers = connectedBots.length;
+  let responseMessage = `*Total de Bots Conectados* : ${totalUsers}\n\n${replyMessage.trim()}`.trim();
 
   await stars.sendMessage(m.chat, { text: responseMessage, mentions: stars.parseMention(responseMessage) }, { quoted: m });
 }
