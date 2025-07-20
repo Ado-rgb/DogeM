@@ -6,8 +6,8 @@ import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
-import * as ws from 'ws'
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // 'stat' es importante para purgeOldFiles
+import * as ws from 'ws' //  <-- ÚNICA IMPORTACIÓN DE WS AQUI
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // 'stat' es importante
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -30,7 +30,7 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const {DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
-const {CONNECTING} = ws
+// const {CONNECTING} = ws // <-- NO NECESITAS ESTO, YA TIENES 'ws' COMPLETO ARRIBA
 const {chain} = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
@@ -270,7 +270,11 @@ if (opcion == '1' || methodCodeQR) {
   }
 let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
 if (reason == 405) {
-await unlinkSync(connInstance.authFile + "/creds.json") // Usa connInstance.authFile
+// Asegúrate de que connInstance.authFile es una cadena válida antes de usarla
+const authFilePath = connInstance.authFile && existsSync(connInstance.authFile) ? connInstance.authFile + "/creds.json" : "./sessions/creds.json";
+if (existsSync(authFilePath)) {
+  await unlinkSync(authFilePath);
+}
 console.log(chalk.bold.redBright(`Conexión replazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
 process.send('reset')}
 if (connection === 'close') {
@@ -315,14 +319,12 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
     connInstance.ev.removeAllListeners()
 
     // Asegúrate de que connInstance.authFile esté definido aquí.
-    // Si es el bot principal, global.authFile ya está definido.
-    // Si es un sub-bot, se estableció en connectSubBot.
-    const authPath = connInstance.authFile || global.authFile; // Fallback para asegurar que siempre haya una ruta
+    const authPath = connInstance.authFile || global.authFile;
 
     const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(authPath);
     connInstance = makeWASocket({ // Recreate the specific instance
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // QR should only be for initial setup
+        printQRInTerminal: false,
         mobile: MethodMobile,
         browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
         auth: {
@@ -344,9 +346,9 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
 
     connInstance.authFile = authPath; // Vuelve a asignar la ruta de authFile a la nueva instancia
 
-    if (connInstance === global.conn) { // Update global.conn if it's the main instance
+    if (connInstance === global.conn) {
         global.conn = connInstance;
-    } else { // Update the specific sub-bot in global.conns
+    } else {
         const subBotId = path.basename(authPath); // Obtiene el nombre de la carpeta (ID de sesión)
         global.conns[subBotId] = connInstance;
     }
@@ -381,6 +383,11 @@ const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrat
 const pluginFilter = (filename) => /\.js$/.test(filename)
 global.plugins = {}
 async function filesInit() {
+  // Asegúrate de que la carpeta 'plugins' exista antes de leerla
+  if (!existsSync(pluginFolder)) {
+    console.error(chalk.red(`Error: La carpeta de plugins '${pluginFolder}' no existe. Por favor, créala.`));
+    return;
+  }
   for (const filename of readdirSync(pluginFolder).filter(pluginFilter)) {
     try {
       const file = global.__filename(join(pluginFolder, filename))
@@ -471,9 +478,9 @@ try {
 number = number.replace(/\s+/g, '')
 // Si el número empieza con '+521' o '+52 1', quitar el '1'
 if (number.startsWith('+521')) {
-number = number.replace('+521', '+52'); // Cambiar +521 a +52
+number = number.replace('+521', '+52');
 } else if (number.startsWith('+52') && number[4] === '1') {
-number = number.replace('+52 1', '+52'); // Cambiar +52 1 a +52
+number = number.replace('+52 1', '+52');
 }
 const parsedNumber = phoneUtil.parseAndKeepRawInput(number)
 return phoneUtil.isValidNumber(parsedNumber)
