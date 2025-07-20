@@ -2,16 +2,13 @@ import axios from 'axios'
 import {
   proto,
   generateWAMessageFromContent,
-  prepareWAMessageMedia,
-  generateWAMessageContent,
-  getDevice
+  generateWAMessageContent
 } from '@whiskeysockets/baileys'
 
-let handler = async (m, { conn, text, usedPrefix, command }) => {
+const handler = async (m, { conn, text }) => {
   if (!text) return conn.reply(m.chat, '🍭Ingresa ch *<txt>*', m)
 
   try {
-    // Descargar datos desde la API
     const { data } = await axios.get(`https://api.hts-team.koyeb.app/starlight/tiktoksearch?text=${text}`)
     let results = data.tiktoks
 
@@ -21,9 +18,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       ;[results[i], results[j]] = [results[j], results[i]]
     }
 
-    // Tomar algunos resultados
-    let selected = results.splice(0, 5)
-    let cards = []
+    const selected = results.splice(0, 5)
+    const cards = []
 
     async function createVideoMessage(url) {
       const { videoMessage } = await generateWAMessageContent(
@@ -33,7 +29,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return videoMessage
     }
 
-    for (let item of selected) {
+    for (const item of selected) {
       cards.push({
         body: proto.Message.InteractiveMessage.Body.fromObject({ text: null }),
         footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: item.author }),
@@ -59,7 +55,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: 'Tiktok - Search' }),
             header: proto.Message.InteractiveMessage.Header.fromObject({ hasMediaAttachment: false }),
             carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
-              cards: [...cards]
+              cards
             })
           })
         }
@@ -67,7 +63,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }, { quoted: m })
 
     await conn.relayMessage(m.chat, msg.message, { messageId: msg.key.id })
-  } catch (e) {
+  } catch {
     await m.react('✖️')
   }
 }
