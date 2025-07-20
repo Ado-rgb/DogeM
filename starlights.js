@@ -1,11 +1,13 @@
+// index.js
+
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
 import './config.js'
 import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
-import * as ws from 'ws'
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // Added 'stat'
+import * as ws from 'ws' // <-- Esta es la importación correcta y ÚNICA de ws
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs'
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -28,7 +30,7 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const {DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
-const {CONNECTING} = ws
+const {CONNECTING} = ws // <-- Esto usa la importación de ws de arriba
 const {chain} = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
@@ -51,8 +53,6 @@ const __dirname = global.__dirname(import.meta.url)
 
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse())
 global.prefix = new RegExp('^[' + (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') + ']')
-
-// global.opts['db'] = process.env['db']
 
 global.db = new Low(/https?:\/\//.test(opts['db'] || '') ? new cloudDBAdapter(opts['db']) : new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`));
 
@@ -132,12 +132,6 @@ version: [2, 3000, 1023223821],
 }
 
 global.conn = makeWASocket(connectionOptions);
-
-// --- INICIO DE DEPURACIÓN PARA AUTHFILE (Mantenido para referencia si lo necesitas) ---
-console.log('--- Depuración de authFile ---');
-console.log('Valor inicial de global.authFile:', global.authFile);
-console.log(`¿Existe la carpeta de autenticación (${global.authFile})?`, existsSync(global.authFile));
-// --- FIN DE DEPURACIÓN ---
 
 if (!existsSync(`./${authFile}/creds.json`)) {
 if (opcion === '2' || methodCode) {
@@ -377,7 +371,7 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
   return true
 };
 
-const pluginFolder = global.__dirname(join(__dirname, './plugins/index'))
+const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins
 const pluginFilter = (filename) => /\.js$/.test(filename)
 global.plugins = {}
 async function filesInit() {
@@ -566,13 +560,11 @@ conn.ev.on('connection.update', async (update) => {
   connectionUpdate(update); // Also call the original connectionUpdate for the main bot
 });
 
-
 // --- INICIO DEL CÓDIGO DEL COMANDO .bots (SOLO SUB-BOTS) ---
-import ws from 'ws'
-
-// Mover la función handler fuera del archivo principal para mantener la modularidad
-// Si este código está en su propio archivo (ej. `plugins/bots.js`), ya estaría bien.
-// Si está pegado en el archivo principal, es recomendable mantener los comandos en archivos separados.
+// NOTA: Si este código está en su propio archivo de plugin (ej. 'plugins/bots.js'),
+// NO necesitas las dos últimas líneas (listSubBotsHandler.command y export default listSubBotsHandler)
+// en este archivo index.js. Solo en el archivo de plugin.
+// Si lo dejas aquí, asegúrate de que tu `handler.js` principal lo importe o lo reconozca.
 
 async function listSubBotsHandler(m, { conn: stars, usedPrefix }) {
   let connectedSubBots = []
@@ -608,14 +600,16 @@ async function listSubBotsHandler(m, { conn: stars, usedPrefix }) {
   await stars.sendMessage(m.chat, { text: responseMessage, mentions: stars.parseMention(responseMessage) }, { quoted: m });
 }
 
-// Asegúrate de que el handler esté exportado correctamente si este es un archivo de plugin
-// Si este código está en un archivo llamado, por ejemplo, `plugins/bots.js`
-// entonces la línea 'export default handler' al final es correcta.
+// Estas líneas son para que el handler sea reconocido.
+// Si este código del comando está en un archivo separado dentro de 'plugins/',
+// entonces estas líneas irían al final de ese archivo de plugin, NO en index.js.
+// Si lo dejas aquí en index.js, tu handler principal deberá ser capaz de encontrarlo.
+// Una forma común es que el handler principal tenga una lógica para "ejecutar" funciones
+// directamente si un comando coincide con el nombre de una función definida.
+global.plugins['listjadibot.js'] = { default: listSubBotsHandler }; // Asegúrate de que este nombre de archivo no colisione
+                                                                   // y que tu sistema de plugins lo reconozca.
 listSubBotsHandler.command = ['listjadibot', 'bots'];
 listSubBotsHandler.help = ['bots'];
 listSubBotsHandler.tags = ['serbot'];
 
-// Si este archivo es donde se definen los handlers, asegúrate de que se asigne correctamente.
-// Si ya tienes un sistema de plugins que importa archivos como este, entonces no necesitas esta asignación aquí.
-// Pero si lo estás pegando en tu archivo principal, asegúrate de que tu `handler` global pueda encontrar `listSubBotsHandler`.
-// Una forma común es que tu
+// --- FIN DEL CÓDIGO DEL COMANDO .bots ---
