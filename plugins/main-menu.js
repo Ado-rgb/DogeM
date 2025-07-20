@@ -31,6 +31,7 @@ before: `
 *╭━━━〔 𝖨𝖭𝖥𝖮 〕━━━╮*
 ┃ *Hola* 👋 *%name*
 ┃ *Soy* DOGE 🔥 
+┃  %bottype
 ┃ 📅 *%week*, %date
 ┃ ⏰ *Hora »* %time
 ┃ ⚡ *Nivel »* %level | ⭐ *XP »* %totalexp
@@ -49,6 +50,10 @@ after: '\n\n*┗ 𝖯𝗈𝗐𝖾𝗋𝖾𝖽 𝖡𝗒 𝖠𝖽𝗈 ┛*'
 
 let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
   try {
+    // Detectar si es bot principal o sub-bot
+    let isPrincipal = conn.user?.id === '50494547493@s.whatsapp.net'
+    let botType = isPrincipal ? '🔰 Bot Principal' : '👾 Sub Bot'
+
     let _package = JSON.parse(await promises.readFile(join(__dirname, '../package.json')).catch(() => ({}))) || {}
     let { exp, limit, level } = global.db.data.users[m.sender]
     let { min, xp, max } = xpRange(level, global.multiplier)
@@ -102,7 +107,8 @@ let handler = async (m, { conn, usedPrefix: _p, __dirname }) => {
       '%': '%', p: _p, uptime: muptime,
       taguser: '@' + m.sender.split("@s.whatsapp.net")[0],
       name, week, date, time, level, limit, totalexp: exp,
-      readmore: readMore
+      readmore: readMore,
+      bottype: botType
     }
 
     let text = _text.replace(new RegExp(`%(${Object.keys(replace).sort((a, b) => b.length - a.length).join('|')})`, 'g'), (_, name) => '' + replace[name])
