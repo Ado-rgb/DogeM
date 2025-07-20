@@ -2,35 +2,36 @@
 
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
 import './config.js'
-import {createRequire} from 'module'
-import path, {join} from 'path'
-import {fileURLToPath, pathToFileURL} from 'url'
-import {platform} from 'process'
-import * as ws from 'ws' // <-- ¡SOLO ESTA IMPORTACIÓN DE WS DEBE ESTAR AQUÍ!
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs'
+import { createRequire } from 'module'
+import path, { join } from 'path'
+import { fileURLToPath, pathToFileURL } from 'url'
+import { platform } from 'process'
+import * as ws from 'ws' // <-- ¡ESTA ES LA ÚNICA IMPORTACIÓN DE WS EN ESTE ARCHIVO!
+import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat } from 'fs'
 import yargs from 'yargs';
-import {spawn} from 'child_process'
+import { spawn } from 'child_process'
 import lodash from 'lodash'
 import chalk from 'chalk'
 import syntaxerror from 'syntax-error'
-import {tmpdir} from 'os'
-import {format} from 'util'
+import { tmpdir } from 'os'
+import { format } from 'util'
 import pino from 'pino'
-import {Boom} from '@hapi/boom'
-import {makeWASocket, protoType, serialize} from './lib/simple.js'
-import {Low, JSONFile} from 'lowdb'
-import {mongoDB, mongoDBV2} from './lib/mongoDB.js'
+import { Boom } from '@hapi/boom'
+import { makeWASocket, protoType, serialize } from './lib/simple.js'
+import { Low, JSONFile } from 'lowdb'
+import { mongoDB, mongoDBV2 } from './lib/mongoDB.js'
 import store from './lib/store.js'
-const {proto} = (await import('@whiskeysockets/baileys')).default
+const { proto } = (await import('@whiskeysockets/baileys')).default
 import pkg from 'google-libphonenumber'
 const { PhoneNumberUtil } = pkg
 const phoneUtil = PhoneNumberUtil.getInstance()
-const {DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
+const { DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
-// Removida: const {CONNECTING} = ws // <-- NO DEBE ESTAR AQUÍ, ws ya está importado
-// Removida: import { setupMaster, fork } from 'cluster' // <-- ESTO CAUSA ERROR, ELIMÍNALO
-const {chain} = lodash
+// NO USAR: const {CONNECTING} = ws; // Ya está disponible a través de 'ws.' si es necesario
+// NO USAR: import { setupMaster, fork } from 'cluster'; // Eliminar esta línea
+
+const { chain } = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
 protoType()
@@ -44,9 +45,9 @@ global.__filename = function filename(pathURL = import.meta.url, rmPrefix = plat
   return createRequire(dir)
 }
 
-global.API = (name, path = '/', query = {}, apikeyqueryname) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({...query, ...(apikeyqueryname ? {[apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name]} : {})})) : '');
+global.API = (name, path = '/', query = {}, apikeyqueryname) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({ ...query, ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}) })) : '');
 
-global.timestamp = {start: new Date}
+global.timestamp = { start: new Date }
 
 const __dirname = global.__dirname(import.meta.url)
 
@@ -81,10 +82,10 @@ global.loadDatabase = async function loadDatabase() {
 loadDatabase()
 
 global.authFile = `sessions` // Carpeta de sesión principal
-const {state, saveState, saveCreds} = await useMultiFileAuthState(global.authFile)
+const { state, saveState, saveCreds } = await useMultiFileAuthState(global.authFile)
 const msgRetryCounterMap = (MessageRetryMap) => { };
 const msgRetryCounterCache = new NodeCache()
-const {version} = await fetchLatestBaileysVersion();
+const { version } = await fetchLatestBaileysVersion();
 let phoneNumber = global.botnumber
 
 const methodCodeQR = process.argv.includes("qr")
@@ -95,9 +96,8 @@ const question = (texto) => new Promise((resolver) => rl.question(texto, resolve
 
 let opcion
 if (methodCodeQR) {
-opcion = '1'
+  opcion = '1'
 }
-// Solo pedir opción si no hay credenciales y no se especificó método por argv
 if (!methodCodeQR && !methodCode && !existsSync(path.join(global.authFile, 'creds.json'))) {
   do {
     let lineM = '⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ 》'
@@ -109,66 +109,64 @@ if (!methodCodeQR && !methodCode && !existsSync(path.join(global.authFile, 'cred
   } while (opcion !== '1' && opcion !== '2')
 }
 
-console.info = () => {}
+console.info = () => { }
 const connectionOptions = {
-logger: pino({ level: 'silent' }),
-printQRInTerminal: opcion == '1' ? true : methodCodeQR ? true : false,
-mobile: MethodMobile,
-browser: opcion == '1' ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : methodCodeQR ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : ['Ubuntu', 'Chrome', '110.0.5585.95'],
-auth: {
-creds: state.creds,
-keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
-},
-markOnlineOnConnect: true,
-generateHighQualityLinkPreview: true,
-getMessage: async (clave) => {
-let jid = jidNormalizedUser(clave.remoteJid)
-let msg = await store.loadMessage(jid, clave.id)
-return msg?.message || ""
-},
-msgRetryCounterCache,
-msgRetryCounterMap,
-defaultQueryTimeoutMs: undefined,
-version: [2, 3000, 1023223821],
+  logger: pino({ level: 'silent' }),
+  printQRInTerminal: opcion == '1' ? true : methodCodeQR ? true : false,
+  mobile: MethodMobile,
+  browser: opcion == '1' ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : methodCodeQR ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : ['Ubuntu', 'Chrome', '110.0.5585.95'],
+  auth: {
+    creds: state.creds,
+    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+  },
+  markOnlineOnConnect: true,
+  generateHighQualityLinkPreview: true,
+  getMessage: async (clave) => {
+    let jid = jidNormalizedUser(clave.remoteJid)
+    let msg = await store.loadMessage(jid, clave.id)
+    return msg?.message || ""
+  },
+  msgRetryCounterCache,
+  msgRetryCounterMap,
+  defaultQueryTimeoutMs: undefined,
+  version: [2, 3000, 1023223821],
 }
 
 global.conn = makeWASocket(connectionOptions);
 global.conn.authFile = global.authFile; // Asegúrate de que el bot principal también tenga su authFile configurado
 
-// Generar código de emparejamiento solo si no hay credenciales y la opción es 2
-if (opcion === '2' || methodCode) {
-  if (!conn.authState.creds.registered) {
-    let addNumber;
-    if (!!phoneNumber) {
-      addNumber = phoneNumber.replace(/[^0-9]/g, '');
-    } else {
-      do {
-        phoneNumber = await question(chalk.bgBlack(chalk.bold.yellowBright('Por favor, escriba su número de WhatsApp.\nEjemplo: 51955918117\n')));
-        phoneNumber = phoneNumber.replace(/\D/g,'');
-        if (!phoneNumber.startsWith('+')) {
-          phoneNumber = `+${phoneNumber}`;
-        }
-      } while (!await isValidPhoneNumber(phoneNumber));
-      rl.close(); // Cerrar readline una vez que se obtiene el número
-      addNumber = phoneNumber.replace(/\D/g, '');
-    }
-
-    // Pequeño retardo para asegurar que la conexión se inicie antes de pedir el código
-    setTimeout(async () => {
-      try {
-        let codigo = await conn.requestPairingCode(addNumber);
-        codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo;
-        console.log(chalk.yellow('Introduce el código de emparejamiento en WhatsApp.'));
-        console.log(chalk.black(chalk.bgGreen(`Su código de emparejamiento: `)), chalk.black(chalk.white(codigo)));
-      } catch (e) {
-        console.error(chalk.red(`Error al solicitar código de emparejamiento: ${e.message}`));
-        console.log(chalk.red('Volviendo a solicitar número.'));
-        // Si hay un error, el bucle do-while para el número se encargará de volver a pedirlo
+if (!existsSync(path.join(global.authFile, 'creds.json'))) { // Usar path.join para la ruta completa
+  if (opcion === '2' || methodCode) {
+    opcion = '2'
+    if (!conn.authState.creds.registered) {
+      let addNumber
+      if (!!phoneNumber) {
+        addNumber = phoneNumber.replace(/[^0-9]/g, '')
+      } else {
+        do {
+          phoneNumber = await question(chalk.bgBlack(chalk.bold.yellowBright('Por favor, escriba su número de WhatsApp.\nEjemplo: 51955918117\n')))
+          phoneNumber = phoneNumber.replace(/\D/g, '')
+          if (!phoneNumber.startsWith('+')) {
+            phoneNumber = `+${phoneNumber}`
+          }
+        } while (!await isValidPhoneNumber(phoneNumber))
+        rl.close()
+        addNumber = phoneNumber.replace(/\D/g, '')
       }
-    }, 2000);
+
+      setTimeout(async () => {
+        try {
+          let codigo = await conn.requestPairingCode(addNumber)
+          codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo
+          console.log(chalk.yellow('Introduce el código de emparejamiento en WhatsApp.'));
+          console.log(chalk.black(chalk.bgGreen(`Su código de emparejamiento: `)), chalk.black(chalk.white(codigo)))
+        } catch (e) {
+          console.error(chalk.red(`Error al solicitar código de emparejamiento: ${e.message}`));
+        }
+      }, 2000)
+    }
   }
 }
-
 
 conn.isInit = false;
 conn.well = false;
@@ -196,82 +194,388 @@ function clearTmp() {
 }
 
 function purgeSession() {
-let prekey = []
-let directorio = existsSync("./sessions") ? readdirSync("./sessions") : [];
-let filesFolderPreKeys = directorio.filter(file => {
-return file.startsWith('pre-key-')
-})
-prekey = [...prekey, ...filesFolderPreKeys]
-filesFolderPreKeys.forEach(files => {
-try { unlinkSync(`./sessions/${files}`) } catch (e) { console.error(`Error deleting pre-key file: ${e.message}`); }
-})
+  let prekey = []
+  let directorio = existsSync("./sessions") ? readdirSync("./sessions") : [];
+  let filesFolderPreKeys = directorio.filter(file => {
+    return file.startsWith('pre-key-')
+  })
+  prekey = [...prekey, ...filesFolderPreKeys]
+  filesFolderPreKeys.forEach(files => {
+    try { unlinkSync(`./sessions/${files}`) } catch (e) { console.error(`Error deleting pre-key file: ${e.message}`); }
+  })
 }
 
 function purgeSessionSB() {
-try {
-let listaDirectorios = existsSync('./serbot/') ? readdirSync('./serbot/') : [];
-let SBprekey = []
-listaDirectorios.forEach(directorio => {
-if (statSync(`./serbot/${directorio}`).isDirectory()) {
-let DSBPreKeys = readdirSync(`./serbot/${directorio}`).filter(fileInDir => {
-return fileInDir.startsWith('pre-key-')
-})
-SBprekey = [...SBprekey, ...DSBPreKeys]
-DSBPreKeys.forEach(fileInDir => {
-try { unlinkSync(`./serbot/${directorio}/${fileInDir}`) } catch (e) { console.error(`Error deleting sub-bot pre-key file: ${e.message}`); }
-})
+  try {
+    let listaDirectorios = existsSync('./serbot/') ? readdirSync('./serbot/') : [];
+    let SBprekey = []
+    listaDirectorios.forEach(directorio => {
+      if (statSync(`./serbot/${directorio}`).isDirectory()) {
+        let DSBPreKeys = readdirSync(`./serbot/${directorio}`).filter(fileInDir => {
+          return fileInDir.startsWith('pre-key-')
+        })
+        SBprekey = [...SBprekey, ...DSBPreKeys]
+        DSBPreKeys.forEach(fileInDir => {
+          try { unlinkSync(`./serbot/${directorio}/${fileInDir}`) } catch (e) { console.error(`Error deleting sub-bot pre-key file: ${e.message}`); }
+        })
+      }
+    })
+    if (SBprekey.length === 0) return; console.log(chalk.cyanBright(`=> No hay archivos por eliminar.`))
+  } catch (err) {
+    console.log(chalk.bold.red(`Algo salio mal durante la eliminación de pre-keys de sub-bots, archivos no eliminados`))
+  }
 }
-})
-if (SBprekey.length === 0) return; console.log(chalk.cyanBright(`=> No hay archivos por eliminar.`))
-} catch (err) {
-console.log(chalk.bold.red(`Algo salio mal durante la eliminación de pre-keys de sub-bots, archivos no eliminados`))
-}}
 
 function purgeOldFiles() {
-const directories = ['./sessions/', './serbot/']
-const oneHourAgo = Date.now() - (60 * 60 * 1000)
-directories.forEach(dir => {
-  if (!existsSync(dir)) return; // Skip if directory doesn't exist
-  readdirSync(dir).forEach(file => {
-    const filePath = path.join(dir, file)
-    try {
-      const stats = statSync(filePath);
-      if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json') {
-        unlinkSync(filePath);
-        console.log(chalk.bold.green(`Archivo ${file} borrado con éxito`));
-      } else {
-        // console.log(chalk.bold.red(`Archivo ${file} no borrado (no es antiguo o es creds.json)`)); // Esto puede ser muy ruidoso
+  const directories = ['./sessions/', './serbot/']
+  const oneHourAgo = Date.now() - (60 * 60 * 1000)
+  directories.forEach(dir => {
+    if (!existsSync(dir)) return; // Skip if directory doesn't exist
+    readdirSync(dir).forEach(file => {
+      const filePath = path.join(dir, file)
+      try {
+        const stats = statSync(filePath);
+        if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json') {
+          unlinkSync(filePath);
+          console.log(chalk.bold.green(`Archivo ${file} borrado con éxito`));
+        }
+      } catch (err) {
+        console.error(chalk.bold.red(`Error procesando archivo ${filePath}: ${err.message}`));
       }
-    } catch (err) {
-      console.error(chalk.bold.red(`Error procesando archivo ${filePath}: ${err.message}`));
-    }
+    });
   });
-});
 }
 
 // Add global.conns to store sub-bot connections
 global.conns = {}
 
 async function connectionUpdate(update, connInstance = global.conn) {
-  const {connection, lastDisconnect, isNewLogin} = update;
-  if (connInstance === global.conn) { // Only update global.stopped for the main connection
+  const { connection, lastDisconnect, isNewLogin } = update;
+  if (connInstance === global.conn) {
     global.stopped = connection;
   }
   if (isNewLogin) connInstance.isInit = true;
   const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
   if (code && code !== DisconnectReason.loggedOut && connInstance?.ws.socket == null) {
-    await global.reloadHandler(true, connInstance).catch(console.error); // Pass connInstance
+    await global.reloadHandler(true, connInstance).catch(console.error);
     if (connInstance === global.conn) {
       global.timestamp.connect = new Date;
     }
   }
   if (global.db.data == null) loadDatabase();
-if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
-if (opcion == '1' || methodCodeQR) {
-    console.log(chalk.yellow('Escanea el código QR.'));
- }}
+  if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
+    if (opcion == '1' || methodCodeQR) {
+      console.log(chalk.yellow('Escanea el código QR.'));
+    }
+  }
   if (connection == 'open') {
     console.log(chalk.yellow(`Conectado correctamente ${connInstance === global.conn ? 'principal' : 'sub-bot'}.`));
   }
-let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-if (reason == 405) {
+  let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+  if (reason == 405) {
+    const authFilePath = (connInstance.authFile && existsSync(connInstance.authFile)) ? path.join(connInstance.authFile, "creds.json") : path.join(global.authFile, "creds.json");
+    if (existsSync(authFilePath)) {
+      try {
+        await unlinkSync(authFilePath);
+        console.log(chalk.yellow(`Credenciales eliminadas para ${authFilePath}`));
+      } catch (e) {
+        console.error(chalk.red(`Error al eliminar credenciales en ${authFilePath}: ${e.message}`));
+      }
+    }
+    console.log(chalk.bold.redBright(`Conexión reemplazada, Por favor espere un momento me voy a reiniciar...\nSi aparecen error vuelve a iniciar con : npm start`))
+    process.send('reset')
+  }
+  if (connection === 'close') {
+    if (reason === DisconnectReason.badSession) {
+      connInstance.logger.error(`Sesión incorrecta, por favor elimina la carpeta ${connInstance.authFile} y escanea nuevamente.`)
+    } else if (reason === DisconnectReason.connectionClosed) {
+      connInstance.logger.warn(`Conexión cerrada, reconectando...`)
+      await global.reloadHandler(true, connInstance).catch(console.error)
+    } else if (reason === DisconnectReason.connectionLost) {
+      connInstance.logger.warn(`Conexión perdida con el servidor, reconectando...`)
+      await global.reloadHandler(true, connInstance).catch(console.error)
+    } else if (reason === DisconnectReason.connectionReplaced) {
+      connInstance.logger.error(`Conexión reemplazada, se ha abierto otra nueva sesión. Por favor, cierra la sesión actual primero.`)
+    } else if (reason === DisconnectReason.loggedOut) {
+      connInstance.logger.error(`Conexion cerrada, por favor elimina la carpeta ${connInstance.authFile} y escanea nuevamente.`)
+    } else if (reason === DisconnectReason.restartRequired) {
+      connInstance.logger.info(`Reinicio necesario, reinicie el servidor si presenta algún problema.`)
+      await global.reloadHandler(true, connInstance).catch(console.error)
+    } else {
+      connInstance.logger.warn(`Razón de desconexión desconocida. ${reason || ''}: ${connection || ''}`)
+      await global.reloadHandler(true, connInstance).catch(console.error)
+    }
+  }
+}
+
+process.on('uncaughtException', console.error)
+
+let isInit = true;
+let handler = await import('./handler.js')
+global.reloadHandler = async function (restatConn, connInstance = global.conn) {
+  try {
+    const Handler = await import(`./handler.js?update=${Date.now()}`).catch(console.error);
+    if (Object.keys(Handler || {}).length) handler = Handler
+  } catch (e) {
+    console.error(e);
+  }
+  if (restatConn) {
+    const oldChats = connInstance.chats
+    try {
+      connInstance.ws.close()
+    } catch { }
+    connInstance.ev.removeAllListeners()
+
+    const authPath = connInstance.authFile || global.authFile;
+    if (!authPath || !existsSync(authPath)) {
+      console.error(chalk.red(`Error: La carpeta de autenticación '${authPath}' no existe o no se pudo determinar. Abortando reconexión.`));
+      return;
+    }
+
+    const { state: newState, saveState: newSaveState, saveCreds: newSaveCreds } = await useMultiFileAuthState(authPath);
+    connInstance = makeWASocket({
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: false,
+      mobile: MethodMobile,
+      browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
+      auth: {
+        creds: newState.creds,
+        keys: makeCacheableSignalKeyStore(newState.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+      },
+      markOnlineOnConnect: true,
+      generateHighQualityLinkPreview: true,
+      getMessage: async (clave) => {
+        let jid = jidNormalizedUser(clave.remoteJid)
+        let msg = await store.loadMessage(jid, clave.id)
+        return msg?.message || ""
+      },
+      msgRetryCounterCache,
+      msgRetryCounterMap,
+      defaultQueryTimeoutMs: undefined,
+      version: [2, 3000, 1023223821],
+    }, { chats: oldChats })
+
+    connInstance.authFile = authPath;
+
+    if (connInstance === global.conn) {
+      global.conn = connInstance;
+    } else {
+      const subBotId = path.basename(authPath);
+      global.conns[subBotId] = connInstance;
+    }
+    isInit = true
+  }
+  if (!isInit) {
+    connInstance.ev.off('messages.upsert', connInstance.handler)
+    connInstance.ev.off('connection.update', connInstance.connectionUpdate)
+    connInstance.ev.off('creds.update', connInstance.credsUpdate)
+  }
+
+  connInstance.handler = handler.handler.bind(connInstance)
+  connInstance.connectionUpdate = (update) => connectionUpdate(update, connInstance);
+  connInstance.credsUpdate = saveCreds.bind(connInstance, true)
+
+  const currentDateTime = new Date()
+  const messageDateTime = new Date(connInstance.ev)
+  if (currentDateTime >= messageDateTime) {
+    const chats = Object.entries(connInstance.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
+  } else {
+    const chats = Object.entries(connInstance.chats).filter(([jid, chat]) => !jid.endsWith('@g.us') && chat.isChats).map((v) => v[0])
+  }
+
+  connInstance.ev.on('messages.upsert', connInstance.handler)
+  connInstance.ev.on('connection.update', connInstance.connectionUpdate)
+  connInstance.ev.on('creds.update', connInstance.credsUpdate)
+  isInit = false
+  return true
+};
+
+const pluginFolder = global.__dirname(join(__dirname, './plugins'))
+const pluginFilter = (filename) => /\.js$/.test(filename)
+global.plugins = {}
+async function filesInit() {
+  if (!existsSync(pluginFolder)) {
+    console.error(chalk.red(`Error: La carpeta de plugins '${pluginFolder}' no existe. Por favor, créala en la raíz de tu bot.`));
+    return;
+  }
+  for (const filename of readdirSync(pluginFolder).filter(pluginFilter)) {
+    try {
+      const file = global.__filename(join(pluginFolder, filename))
+      const module = await import(file)
+      global.plugins[filename] = module.default || module
+    } catch (e) {
+      console.error(chalk.red(`Error al cargar el plugin '${filename}': ${e.message}`));
+      delete global.plugins[filename]
+    }
+  }
+}
+filesInit().then((_) => Object.keys(global.plugins)).catch(console.error);
+
+global.reload = async (_ev, filename) => {
+  if (pluginFilter(filename)) {
+    const dir = global.__filename(join(pluginFolder, filename), true);
+    if (filename in global.plugins) {
+      if (existsSync(dir)) conn.logger.info(` updated plugin - '${filename}'`)
+      else {
+        conn.logger.warn(`deleted plugin - '${filename}'`)
+        return delete global.plugins[filename]
+      }
+    } else conn.logger.info(`new plugin - '${filename}'`);
+    const err = syntaxerror(readFileSync(dir), filename, {
+      sourceType: 'module',
+      allowAwaitOutsideFunction: true,
+    });
+    if (err) conn.logger.error(`syntax error while loading '${filename}'\n${format(err)}`)
+    else {
+      try {
+        const module = (await import(`${global.__filename(dir)}?update=${Date.now()}`));
+        global.plugins[filename] = module.default || module;
+      } catch (e) {
+        conn.logger.error(`error require plugin '${filename}\n${format(e)}'`)
+      } finally {
+        global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)))
+      }
+    }
+  }
+}
+Object.freeze(global.reload)
+watch(pluginFolder, global.reload)
+await global.reloadHandler()
+async function _quickTest() {
+  const test = await Promise.all([
+    spawn('ffmpeg'),
+    spawn('ffprobe'),
+    spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-filter_complex', 'color', '-frames:v', '1', '-f', 'webp', '-']),
+    spawn('convert'),
+    spawn('magick'),
+    spawn('gm'),
+    spawn('find', ['--version']),
+  ].map((p) => {
+    return Promise.race([
+      new Promise((resolve) => {
+        p.on('close', (code) => {
+          resolve(code !== 127);
+        });
+      }),
+      new Promise((resolve) => {
+        p.on('error', (_) => resolve(false));
+      })]);
+  }));
+  const [ffmpeg, ffprobe, ffmpegWebp, convert, magick, gm, find] = test;
+  const s = global.support = { ffmpeg, ffprobe, ffmpegWebp, convert, magick, gm, find };
+  Object.freeze(global.support);
+}
+setInterval(async () => {
+  if (stopped === 'close' || !conn || !conn.user) return
+  const a = await clearTmp()
+}, 180000)
+setInterval(async () => {
+  if (stopped === 'close' || !conn || !conn.user) return
+  await purgeSession()
+}, 1000 * 60 * 60);
+setInterval(async () => {
+  if (stopped === 'close' || !conn || !conn.user) return
+  await purgeSessionSB()
+}, 1000 * 60 * 60);
+setInterval(async () => {
+  if (stopped === 'close' || !conn || !conn.user) return
+  await purgeOldFiles()
+}, 1000 * 60 * 60);
+_quickTest().catch(console.error)
+
+async function isValidPhoneNumber(number) {
+  try {
+    number = number.replace(/\s+/g, '')
+    if (number.startsWith('+521')) {
+      number = number.replace('+521', '+52');
+    } else if (number.startsWith('+52') && number[4] === '1') {
+      number = number.replace('+52 1', '+52');
+    }
+    const parsedNumber = phoneUtil.parseAndKeepRawInput(number)
+    return phoneUtil.isValidNumber(parsedNumber)
+  } catch (error) {
+    return false
+  }
+}
+
+async function connectSubBot(sessionId) {
+  const authFolderPath = `./serbot/${sessionId}`;
+  if (!existsSync(authFolderPath)) {
+    console.warn(chalk.yellow(`Skipping sub-bot '${sessionId}': Session folder not found.`));
+    return null;
+  }
+  if (!existsSync(path.join(authFolderPath, 'creds.json'))) {
+    console.warn(chalk.yellow(`Skipping sub-bot '${sessionId}': creds.json not found.`));
+    return null;
+  }
+
+  const { state, saveState, saveCreds } = await useMultiFileAuthState(authFolderPath);
+
+  const subConnectionOptions = {
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    mobile: MethodMobile,
+    browser: ['Ubuntu', 'Chrome', '110.0.5585.95'],
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+    },
+    markOnlineOnConnect: true,
+    generateHighQualityLinkPreview: true,
+    getMessage: async (clave) => {
+      let jid = jidNormalizedUser(clave.remoteJid)
+      let msg = await store.loadMessage(jid, clave)
+      return msg?.message || ""
+    },
+    msgRetryCounterCache,
+    msgRetryCounterMap,
+    defaultQueryTimeoutMs: undefined,
+    version: [2, 3000, 1023223821],
+  };
+
+  const subConn = makeWASocket(subConnectionOptions);
+  subConn.authFile = authFolderPath;
+
+  subConn.handler = handler.handler.bind(subConn);
+  subConn.connectionUpdate = (update) => connectionUpdate(update, subConn);
+  subConn.credsUpdate = saveCreds.bind(subConn, true);
+
+  subConn.ev.on('messages.upsert', subConn.handler);
+  subConn.ev.on('connection.update', subConn.connectionUpdate);
+  subConn.ev.on('creds.update', subConn.credsUpdate);
+
+  console.log(chalk.blue(`Attempting to connect sub-bot: ${sessionId}`));
+  return subConn;
+}
+
+async function loadSubBots() {
+  const serbotDir = './serbot';
+  if (!existsSync(serbotDir)) {
+    console.log(chalk.yellow('No "serbot" directory found. Skipping sub-bot loading.'));
+    return;
+  }
+
+  const subBotFolders = readdirSync(serbotDir).filter(item => {
+    const itemPath = join(serbotDir, item);
+    return statSync(itemPath).isDirectory() && existsSync(join(itemPath, 'creds.json'));
+  });
+
+  for (const folder of subBotFolders) {
+    console.log(chalk.magenta(`Found sub-bot session: ${folder}`));
+    const subConn = await connectSubBot(folder);
+    if (subConn) {
+      global.conns[folder] = subConn;
+      console.log(chalk.green(`Sub-bot '${folder}' added to global.conns.`));
+    }
+  }
+  console.log(chalk.cyan(`Finished loading ${Object.keys(global.conns).length} sub-bots.`));
+}
+
+conn.ev.on('connection.update', async (update) => {
+  if (update.connection === 'open' && !conn.isSubBotsLoaded) {
+    console.log(chalk.bold.green('Main bot connected. Loading sub-bots...'));
+    await loadSubBots();
+    conn.isSubBotsLoaded = true;
+  }
+  connectionUpdate(update, global.conn);
+});
