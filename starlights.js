@@ -6,8 +6,8 @@ import {createRequire} from 'module'
 import path, {join} from 'path'
 import {fileURLToPath, pathToFileURL} from 'url'
 import {platform} from 'process'
-import * as ws from 'ws' // Esta es la importación correcta y ÚNICA de ws
-import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // Añadido 'stat' de nuevo
+import * as ws from 'ws'
+import {readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat} from 'fs' // 'stat' es importante para purgeOldFiles
 import yargs from 'yargs';
 import {spawn} from 'child_process'
 import lodash from 'lodash'
@@ -81,7 +81,7 @@ global.loadDatabase = async function loadDatabase() {
 }
 loadDatabase()
 
-global.authFile = `sessions`
+global.authFile = `sessions` // Carpeta de sesión principal
 const {state, saveState, saveCreds} = await useMultiFileAuthState(global.authFile)
 const msgRetryCounterMap = (MessageRetryMap) => { };
 const msgRetryCounterCache = new NodeCache()
@@ -132,6 +132,7 @@ version: [2, 3000, 1023223821],
 }
 
 global.conn = makeWASocket(connectionOptions);
+global.conn.authFile = global.authFile; // Asegúrate de que el bot principal también tenga su authFile configurado
 
 if (!existsSync(`./${authFile}/creds.json`)) {
 if (opcion === '2' || methodCode) {
@@ -312,8 +313,13 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
       connInstance.ws.close() // Close the specific instance
     } catch { }
     connInstance.ev.removeAllListeners()
-    // Usa connInstance.authFile aquí
-    const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(connInstance.authFile);
+
+    // Asegúrate de que connInstance.authFile esté definido aquí.
+    // Si es el bot principal, global.authFile ya está definido.
+    // Si es un sub-bot, se estableció en connectSubBot.
+    const authPath = connInstance.authFile || global.authFile; // Fallback para asegurar que siempre haya una ruta
+
+    const {state: newState, saveState: newSaveState, saveCreds: newSaveCreds} = await useMultiFileAuthState(authPath);
     connInstance = makeWASocket({ // Recreate the specific instance
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false, // QR should only be for initial setup
@@ -336,24 +342,25 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
         version: [2, 3000, 1023223821],
     }, {chats: oldChats})
 
+    connInstance.authFile = authPath; // Vuelve a asignar la ruta de authFile a la nueva instancia
+
     if (connInstance === global.conn) { // Update global.conn if it's the main instance
         global.conn = connInstance;
     } else { // Update the specific sub-bot in global.conns
-        // Ajusta el índice si la ruta cambia (ej. './serbot/ID/creds.json' -> id estaría en índice 2)
-        const subBotId = connInstance.authFile.split('/').pop(); // Obtiene el último elemento de la ruta (el ID de la sesión)
+        const subBotId = path.basename(authPath); // Obtiene el nombre de la carpeta (ID de sesión)
         global.conns[subBotId] = connInstance;
     }
     isInit = true
   }
   if (!isInit) {
-    connInstance.ev.off('messages.upsert', connInstance.handler) // Usa connInstance.handler
-    connInstance.ev.off('connection.update', connInstance.connectionUpdate) // Usa connInstance.connectionUpdate
-    connInstance.ev.off('creds.update', connInstance.credsUpdate) // Usa connInstance.credsUpdate
+    connInstance.ev.off('messages.upsert', connInstance.handler)
+    connInstance.ev.off('connection.update', connInstance.connectionUpdate)
+    connInstance.ev.off('creds.update', connInstance.credsUpdate)
   }
 
-  connInstance.handler = handler.handler.bind(connInstance) // Bind to specific instance
-  connInstance.connectionUpdate = (update) => connectionUpdate(update, connInstance); // Bind connectionUpdate with specific instance
-  connInstance.credsUpdate = saveCreds.bind(connInstance, true) // Bind to specific instance
+  connInstance.handler = handler.handler.bind(connInstance)
+  connInstance.connectionUpdate = (update) => connectionUpdate(update, connInstance);
+  connInstance.credsUpdate = saveCreds.bind(connInstance, true)
 
   const currentDateTime = new Date()
   const messageDateTime = new Date(connInstance.ev)
@@ -370,7 +377,7 @@ global.reloadHandler = async function(restatConn, connInstance = global.conn) { 
   return true
 };
 
-const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins (sin '/index' si no existe)
+const pluginFolder = global.__dirname(join(__dirname, './plugins')) // Asegúrate de que apunte a tu carpeta de plugins
 const pluginFilter = (filename) => /\.js$/.test(filename)
 global.plugins = {}
 async function filesInit() {
@@ -514,7 +521,7 @@ async function connectSubBot(sessionId) {
   subConn.authFile = authFolderPath; // Store the auth file path for the sub-bot
 
   subConn.handler = handler.handler.bind(subConn);
-  subConn.connectionUpdate = (update) => connectionUpdate(update, subConn); // Pass subConn to connectionUpdate
+  subConn.connectionUpdate = (update) => connectionUpdate(update, subConn);
   subConn.credsUpdate = saveCreds.bind(subConn, true);
 
   subConn.ev.on('messages.upsert', subConn.handler);
@@ -556,7 +563,5 @@ conn.ev.on('connection.update', async (update) => {
     await loadSubBots();
     conn.isSubBotsLoaded = true; // Prevent multiple loadings
   }
-  // También llama a la función connectionUpdate general para el bot principal
-  // ya que este listener es solo para el bot principal.
   connectionUpdate(update, global.conn);
 });
