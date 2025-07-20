@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!text) return m.reply(`🌤️ *Uso correcto:*\n${usedPrefix + command} <ciudad>\n\nEjemplo:\n${usedPrefix + command} Santa Rosa de lima`)
+  if (!text) return m.reply(`🌤️ *Uso correcto:*\n${usedPrefix + command} <ciudad>\n\nEjemplo:\n${usedPrefix + command} Santa Rosa de Copan`)
 
   try {
     let url = `https://api.nekorinn.my.id/info/weather?city=${encodeURIComponent(text)}`
@@ -12,6 +12,13 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     let loc = data.result.location
     let cur = data.result.current
+
+    // Verificar coincidencia con lo que pidió el usuario
+    let cityRequested = text.toLowerCase().replace(/\s+/g, '')
+    let cityFound = `${loc.name} ${loc.region} ${loc.country}`.toLowerCase().replace(/\s+/g, '')
+    if (!cityFound.includes(cityRequested.split(' ')[0])) {
+      return m.reply(`⚠️ No encontré coincidencia exacta para *${text}*.\nMejor intenta con otro nombre más específico.`)
+    }
 
     let msg = `🌍 *${loc.name}, ${loc.region} - ${loc.country}*
 🕒 *Hora local:* ${loc.localtime}
