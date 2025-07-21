@@ -18,8 +18,7 @@ let handler = async (m, { conn, text }) => {
   }
 }
 
-handler.help = ['aimath']
-handler.tags = ['ia']
+
 handler.command = ['aimath', 'mathai', 'iamath']
 
 export default handler
