@@ -18,7 +18,7 @@ async function handler(m, { conn: stars, usedPrefix }) {
   // Iterate over the sub-bots stored in global.conns
   // Using Object.entries to get both the subBotId (key) and the conn object (value)
   for (const [subBotId, conn] of Object.entries(global.conns)) {
-    
+
     // Validate that the connection object and its 'user' property exist.
     // A 'conn' object without 'conn.user' is usually an incomplete or failed connection.
     if (!conn || !conn.user) {
@@ -29,7 +29,7 @@ async function handler(m, { conn: stars, usedPrefix }) {
     // --- CRITICAL CONNECTION STATE CHECKS ---
     // 1. Check WebSocket readyState: ws.OPEN (which is typically 1) means the socket is open and ready.
     const isWsSocketOpen = conn.ws.socket && conn.ws.socket.readyState === ws.OPEN;
-    
+
     // 2. Check Baileys 'connection' status: 'open' is the most reliable state from Baileys.
     const isBaileysStatusOpen = conn.connection === 'open';
 
