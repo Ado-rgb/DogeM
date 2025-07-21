@@ -5,7 +5,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     return m.reply(`🌵 *Adonix IA:*\n\nEscribí algo maje...\nEjemplo:\n${usedPrefix + command} dime un chiste`);
   }
 
-  await m.react('🧠');
+  await m.react('🔥');
 
   try {
     const apiURL = `https://myapiadonix.vercel.app/api/adonixvoz?q=${encodeURIComponent(text)}`;
