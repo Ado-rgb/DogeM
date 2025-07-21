@@ -37,7 +37,7 @@ async function uploadUguu(path) {
   try {
     const form = new FormData()
     form.append("files[]", fs.createReadStream(path))   
-    const res = await fetch("https://uguu.se/upload.php", {
+    const res = await fetch("https://catbox.moe/user/api.php", {
       method: "POST",
       headers: form.getHeaders(),
       body: form
