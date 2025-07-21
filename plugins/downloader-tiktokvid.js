@@ -38,8 +38,8 @@ let handler = async (message, { conn, text, usedPrefix, command }) => {
           title: '🔰 𝘿𝙚𝙨𝙘𝙖𝙧𝙜𝙖',
           body: author,
           previewType: 0, 
-          thumbnail: avatar,
-          sourceUrl: redes 
+          thumbnail: 'https://files.catbox.moe/9qxauc.jpg',
+          sourceUrl: 'myapiadonix.vercel.app' 
         }
       }
     });
