@@ -1,16 +1,22 @@
 import ws from 'ws'
-import chalk from 'chalk' // Asegúrate de tener chalk importado en tu archivo principal o aquí si es un módulo independiente
+import chalk from 'chalk'
 
 async function handler(m, { conn: stars, usedPrefix }) {
   let connectedSubBots = []
   let mentionedJids = []; // Array para almacenar los JIDs para las menciones
 
   console.log(chalk.blue('--- Iniciando verificación de sub-bots para el comando .bots ---'));
-  console.log(chalk.blue(`Número de entradas en global.conns: ${Object.keys(global.conns).length}`));
+  console.log(chalk.blue(`Número de entradas iniciales en global.conns: ${Object.keys(global.conns).length}`));
+
+  // Añadir una pequeña demora para permitir que los estados de conexión se asienten
+  // Esto es un intento de solucionar posibles problemas de "race condition"
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Espera 1 segundo
+
+  console.log(chalk.blue(`Número de entradas en global.conns después de 1 segundo: ${Object.keys(global.conns).length}`));
 
   // Iterar sobre los sub-bots en global.conns
-  for (const subBotId in global.conns) {
-    const conn = global.conns[subBotId];
+  // Usamos Object.entries para obtener tanto el ID como el objeto de conexión
+  for (const [subBotId, conn] of Object.entries(global.conns)) {
     
     // Validar que la conexión exista y que el usuario esté definido
     if (!conn || !conn.user) {
@@ -20,25 +26,24 @@ async function handler(m, { conn: stars, usedPrefix }) {
 
     // Validar el estado del WebSocket
     // ws.OPEN (1) significa que el socket está conectado y listo
-    const isWsOpen = conn.ws.socket && conn.ws.socket.readyState === ws.OPEN;
+    const isWsSocketOpen = conn.ws.socket && conn.ws.socket.readyState === ws.OPEN;
     
     // Validar el estado de conexión de Baileys
     // conn.connection === 'open' es el estado más fiable de Baileys
-    const isBaileysOpen = conn.connection === 'open';
+    const isBaileysStatusOpen = conn.connection === 'open';
 
-    console.log(chalk.cyan(`[DEBUG] Sub-bot ${subBotId} (JID: ${conn.user.jid}):`));
-    console.log(chalk.cyan(`  - Estado Baileys (conn.connection): '${conn.connection}'`));
-    console.log(chalk.cyan(`  - Estado WebSocket (conn.ws.socket.readyState): ${conn.ws.socket ? conn.ws.socket.readyState : 'No hay socket'}`));
-    console.log(chalk.cyan(`  - ¿WebSocket Abierto (isWsOpen)? ${isWsOpen}`));
-    console.log(chalk.cyan(`  - ¿Baileys Abierto (isBaileysOpen)? ${isBaileysOpen}`));
+    console.log(chalk.cyan(`[DEBUG] Procesando Sub-bot: ${subBotId} (JID: ${conn.user.jid})`));
+    console.log(chalk.cyan(`  - Estado Baileys (conn.connection): '${conn.connection}' (Esperado: 'open')`));
+    console.log(chalk.cyan(`  - Estado WebSocket (conn.ws.socket.readyState): ${conn.ws.socket ? conn.ws.socket.readyState : 'No hay socket'} (Esperado: ${ws.OPEN} - OPEN)`));
+    console.log(chalk.cyan(`  - ¿WebSocket Abierto (isWsSocketOpen)? ${isWsSocketOpen}`));
+    console.log(chalk.cyan(`  - ¿Baileys Abierto (isBaileysStatusOpen)? ${isBaileysStatusOpen}`));
 
-
-    if (isWsOpen && isBaileysOpen) {
+    if (isWsSocketOpen && isBaileysStatusOpen) {
       connectedSubBots.push(conn); // Añadir el objeto de conexión
       mentionedJids.push(conn.user.jid); // Añadir el JID completo para las menciones
       console.log(chalk.green(`  -> Sub-bot ${subBotId} DETECTADO COMO CONECTADO Y FUNCIONAL.`));
     } else {
-      console.log(chalk.red(`  -> Sub-bot ${subBotId} NO ESTÁ CONECTADO (o su estado no es 'open'/'WebSocket abierto').`));
+      console.log(chalk.red(`  -> Sub-bot ${subBotId} NO ESTÁ CONECTADO (uno o ambos estados no son 'open').`));
     }
   }
 
@@ -71,7 +76,7 @@ async function handler(m, { conn: stars, usedPrefix }) {
   console.log(chalk.green(`--- Comando .bots ejecutado con éxito. Se listaron ${totalSubBots} sub-bots. ---`));
 }
 
-handler.command = ['listjadibot', 'bots', 'subbots']; // Añadí 'subbots' como alias
+handler.command = ['listjadibot', 'bots', 'subbots']; 
 handler.help = ['bots', 'subbots'];
 handler.tags = ['serbot'];
 export default handler;
