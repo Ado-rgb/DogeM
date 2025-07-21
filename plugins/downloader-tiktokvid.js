@@ -36,7 +36,7 @@ let handler = async (message, { conn, text, usedPrefix, command }) => {
           mediaType: 1, 
           showAdAttribution: true,
           title: '🔰 𝘿𝙚𝙨𝙘𝙖𝙧𝙜𝙖',
-          body: dev,
+          body: author,
           previewType: 0, 
           thumbnail: avatar,
           sourceUrl: redes 
