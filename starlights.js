@@ -1,15 +1,14 @@
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
-import './config.js'; // Asegúrate de que config.js existe y define global.botnumber si lo usas.
+
+import './config.js';
 import { createRequire } from 'module';
 import path, { join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { platform } from 'process';
-import * as ws from 'ws'; // Importar 'ws' como módulo
-import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, writeFileSync, rmSync, watch, stat } from 'fs'; // Asegúrate de tener writeFileSync
+import * as ws from 'ws';
+import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, watch, mkdirSync } from 'fs';
 import yargs from 'yargs';
-import { spawn } from 'child_process';
-import lodash from 'lodash';
-import chalk from 'chalk'; // Asegúrate de que 'chalk' esté instalado (npm install chalk)
+import chalk from 'chalk';
 import syntaxerror from 'syntax-error';
 import { tmpdir } from 'os';
 import { format } from 'util';
@@ -17,25 +16,27 @@ import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import { makeWASocket, protoType, serialize } from './lib/simple.js';
 import { Low, JSONFile } from 'lowdb';
-import { mongoDB, mongoDBV2 } from './lib/mongoDB.js'; // Asegúrate de que estos módulos existen si los usas
-import store from './lib/store.js'; // Asegúrate de que este módulo existe y es CORRECTO
-const { proto } = (await import('@whiskeysockets/baileys')).default;
-import pkg from 'google-libphonenumber';
-const { PhoneNumberUtil } = pkg;
-const phoneUtil = PhoneNumberUtil.getInstance();
-const { DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys');
+import lodash from 'lodash';
 import readline from 'readline';
-import NodeCache from 'node-cache'; // Importa NodeCache
-const { CONNECTING } = ws; // Obtener CONNECTING del import * as ws
-const { chain } = lodash;
-const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
-// No es necesario importar 'fs' de nuevo, ya está en la línea 9.
+import NodeCache from 'node-cache';
+import qrcode from 'qrcode-terminal';
+import { spawn } from 'child_process';
 
-// Extender prototipos y serializar mensajes
+const { proto } = (await import('@whiskeysockets/baileys')).default;
+const {
+  DisconnectReason,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  Browsers,
+  makeCacheableSignalKeyStore,
+  jidNormalizedUser,
+} = await import('@whiskeysockets/baileys');
+
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
+
 protoType();
 serialize();
 
-// Definiciones de rutas globales
 global.__filename = function filename(pathURL = import.meta.url, rmPrefix = platform !== 'win32') {
   return rmPrefix ? /file:\/\/\//.test(pathURL) ? fileURLToPath(pathURL) : pathURL : pathToFileURL(pathURL).toString();
 };
@@ -46,28 +47,43 @@ global.__require = function require(dir = import.meta.url) {
   return createRequire(dir);
 };
 
-// Configuración de API (si la usas)
-global.API = (name, path = '/', query = {}, apikeyqueryname) => (name in global.APIs ? global.APIs[name] : name) + path + (query || apikeyqueryname ? '?' + new URLSearchParams(Object.entries({ ...query, ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}) })) : '');
+global.API = (name, path = '/', query = {}, apikeyqueryname) =>
+  (name in global.APIs ? global.APIs[name] : name) +
+  path +
+  (query || apikeyqueryname
+    ? '?' +
+      new URLSearchParams(
+        Object.entries({
+          ...query,
+          ...(apikeyqueryname ? { [apikeyqueryname]: global.APIKeys[name in global.APIs ? global.APIs[name] : name] } : {}),
+        })
+      )
+    : '');
 
 global.timestamp = { start: new Date() };
 
 const __dirname = global.__dirname(import.meta.url);
 
-// Parsing de argumentos de línea de comandos
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
-global.prefix = new RegExp('^[' + (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') + ']');
+global.prefix = new RegExp(
+  '^[' +
+    (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') +
+    ']'
+);
 
-// Configuración de la base de datos (LowDB)
-// Nota: 'cloudDBAdapter' no está definido aquí, asegúrate de que se importe si lo necesitas.
-global.db = new Low(/https?:\/\//.test(opts['db'] || '') ? new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`) : new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`)); // Asumiendo JSONFile si no hay cloudDBAdapter
+global.db = new Low(new JSONFile(`storage/databases/database.json`));
+
 global.DATABASE = global.db;
 global.loadDatabase = async function loadDatabase() {
-  if (global.db.READ) return new Promise((resolve) => setInterval(async function () {
-    if (!global.db.READ) {
-      clearInterval(this);
-      resolve(global.db.data == null ? global.loadDatabase() : global.db.data);
-    }
-  }, 1 * 1000));
+  if (global.db.READ)
+    return new Promise((resolve) =>
+      setInterval(async function () {
+        if (!global.db.READ) {
+          clearInterval(this);
+          resolve(global.db.data == null ? global.loadDatabase() : global.db.data);
+        }
+      }, 1 * 1000)
+    );
   if (global.db.data !== null) return;
   global.db.READ = true;
   await global.db.read().catch(console.error);
@@ -79,692 +95,390 @@ global.loadDatabase = async function loadDatabase() {
     msgs: {},
     sticker: {},
     settings: {},
-    ...(global.db.data || {})
+    ...(global.db.data || {}),
   };
-  global.db.chain = chain(global.db.data);
-};
-loadDatabase();
-
-
-// --- Gestión del archivo bots.json para sub-bots conectados ---
-const botsJsonPath = './bots.json';
-let connectedSubBots = [];
-
-// Cargar los sub-bots conectados desde bots.json al inicio
-const loadConnectedSubBots = () => {
-    if (existsSync(botsJsonPath)) {
-        try {
-            connectedSubBots = JSON.parse(readFileSync(botsJsonPath, 'utf8'));
-            if (!Array.isArray(connectedSubBots)) { // Asegurar que es un array
-                console.error(chalk.red('[BOTS.JSON] bots.json no es un array válido. Se inicializa vacío.'));
-                connectedSubBots = [];
-            }
-            console.log(chalk.blue(`[BOTS.JSON] ${connectedSubBots.length} sub-bots conectados cargados desde ${botsJsonPath}.`));
-        } catch (e) {
-            console.error(chalk.red(`[BOTS.JSON] Error al leer bots.json: ${e}. Se inicializa vacío.`));
-            connectedSubBots = [];
-        }
-    } else {
-        console.log(chalk.blue(`[BOTS.JSON] bots.json no encontrado, se creará uno nuevo.`));
-        connectedSubBots = [];
-        saveConnectedSubBots(); // Crear el archivo vacío si no existe
-    }
+  global.db.chain = lodash.chain(global.db.data);
 };
 
-// Guardar los sub-bots conectados en bots.json
-const saveConnectedSubBots = () => {
-    try {
-        writeFileSync(botsJsonPath, JSON.stringify(connectedSubBots, null, 2), 'utf8');
-        // console.log(chalk.green(`[BOTS.JSON] Lista de sub-bots conectados guardada en ${botsJsonPath}.`)); // Descomentar para logs frecuentes
-    } catch (e) {
-        console.error(chalk.red(`[BOTS.JSON] Error al guardar bots.json: ${e}`));
-    }
-};
+global.authFile = `sessions`;
+const { state, saveCreds } = await useMultiFileAuthState(global.authFile);
 
-// Añadir un sub-bot a la lista de conectados
-const addConnectedSubBot = (subBotId) => {
-    if (!connectedSubBots.includes(subBotId)) {
-        connectedSubBots.push(subBotId);
-        saveConnectedSubBots();
-        console.log(chalk.green(`[BOTS.JSON] Sub-bot '${subBotId}' añadido a la lista de conectados.`));
-    }
-};
-
-// Eliminar un sub-bot de la lista de conectados
-const removeConnectedSubBot = (subBotId) => {
-    const initialLength = connectedSubBots.length;
-    connectedSubBots = connectedSubBots.filter(id => id !== subBotId);
-    if (connectedSubBots.length < initialLength) {
-        saveConnectedSubBots();
-        console.log(chalk.red(`[BOTS.JSON] Sub-bot '${subBotId}' eliminado de la lista de conectados.`));
-    }
-};
-
-loadConnectedSubBots(); // Cargar al inicio
-
-
-// Configuración de autenticación de Baileys
-global.authFile = `sessions`; // O la ruta que uses para la sesión principal
-const { state, saveState, saveCreds } = await useMultiFileAuthState(global.authFile);
-const msgRetryCounterMap = {}; // Debe ser un objeto
-const msgRetryCounterCache = new NodeCache(); // Correctamente inicializado
 const { version } = await fetchLatestBaileysVersion();
-let phoneNumber = global.botnumber; // Asegúrate de que global.botnumber esté definido en config.js o similar
 
-// Métodos de autenticación
-const methodCodeQR = process.argv.includes("qr");
-const methodCode = !!phoneNumber || process.argv.includes("code");
-const MethodMobile = process.argv.includes("mobile");
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const question = (texto) => new Promise((resolver) => rl.question(texto, resolver));
 
-let opcion;
-if (methodCodeQR) {
-  opcion = '1';
-}
-// Si no hay creds y no se especificó un método por línea de comandos, preguntar al usuario
-if (!methodCodeQR && !methodCode && !fs.existsSync(`./${global.authFile}/creds.json`)) { // Usar global.authFile
-  do {
-    opcion = await question('Seleccione una opción:\n1. Con código QR\n2. Con código de texto de 8 dígitos\n---> ');
+const logger = pino({
+  timestamp: () => `,"time":"${new Date().toJSON()}"`,
+}).child({ class: 'client' });
+logger.level = 'fatal';
 
-    if (!/^[1-2]$/.test(opcion)) {
-      console.log('Por favor, seleccione solo 1 o 2.\n');
-    }
-  } while (!/^[1-2]$/.test(opcion) || fs.existsSync(`./${global.authFile}/creds.json`)); // Usar global.authFile
-}
-
-// Silenciar logs de consola de pino (para evitar spam del bot principal en producción, sub-bots usarán 'info')
-// Si quieres ver los logs del bot principal, cambia 'silent' a 'info' o 'debug'
-// console.info = () => { }; // Comentar o eliminar esta línea para ver los logs del bot principal
-
-// Función para validar número de teléfono (asumiendo que quieres usar google-libphonenumber)
-async function isValidPhoneNumber(phoneNumber) {
-    try {
-        const number = phoneUtil.parseAndKeepRawInput(phoneNumber);
-        return phoneUtil.isValidNumber(number);
-    } catch (e) {
-        return false;
-    }
-}
-
-
-// Opciones de conexión para el bot principal
 const connectionOptions = {
-  logger: pino({ level: 'silent' }), // Nivel de log silencioso para el bot principal
-  printQRInTerminal: opcion == '1' || methodCodeQR, // Imprimir QR solo si se elige opción 1 o methodCodeQR
-  mobile: MethodMobile,
-  browser: opcion == '1' || methodCodeQR ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : ['Ubuntu', 'Chrome', '110.0.5585.95'],
+  version: version,
+  logger,
+  printQRInTerminal: false,
   auth: {
     creds: state.creds,
-    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+    keys: makeCacheableSignalKeyStore(state.keys, logger),
   },
-  markOnlineOnConnect: true,
+  browser: Browsers.ubuntu('Chrome'),
+  markOnlineOnclientect: false,
   generateHighQualityLinkPreview: true,
-  getMessage: async (clave) => {
-    // Asegurarse de que 'store' y 'store.loadMessage' existen antes de usarlos
-    if (store && typeof store.loadMessage === 'function') {
-      let jid = jidNormalizedUser(clave.remoteJid);
-      let msg = await store.loadMessage(jid, clave.id);
-      return msg?.message || "";
-    } else {
-      console.error(chalk.red("[BOT PRINCIPAL] Error: 'store' o 'store.loadMessage' no están definidos o no son una función."));
-      return ""; // Devuelve vacío si store no está listo
-    }
+  syncFullHistory: true,
+  retryRequestDelayMs: 10,
+  transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 10 },
+  maxMsgRetryCount: 15,
+  appStateMacVerification: {
+    patch: false,
+    snapshot: false,
   },
-  msgRetryCounterCache,
-  msgRetryCounterMap,
-  defaultQueryTimeoutMs: undefined,
-  version: [2, 3000, 1023223821], // Versión de Baileys, considera actualizar si hay problemas
+  getMessage: async (key) => {
+    const jid = jidNormalizedUser(key.remoteJid);
+    const msg = await store.loadMessage(jid, key.id);
+    return msg?.message || '';
+  },
 };
 
 global.conn = makeWASocket(connectionOptions);
 
-// Lógica para código de emparejamiento (opción 2)
-if (!fs.existsSync(`./${global.authFile}/creds.json`)) { // Usar global.authFile
-  if (opcion === '2' || methodCode) {
-    // Si la opción es 2 y no hay credenciales registradas
-    if (!conn.authState.creds.registered) {
-      let addNumber;
-      if (!!phoneNumber) { // Si el número ya está definido (ej. desde config.js)
-        addNumber = phoneNumber.replace(/[^0-9]/g, '');
-      } else { // Si el número no está definido, pedirlo
-        do {
-          phoneNumber = await question(chalk.bgBlack(chalk.bold.yellowBright('Por favor, escriba su número de WhatsApp.\nEjemplo: 51955918117\n')));
-          phoneNumber = phoneNumber.replace(/\D/g, '');
-          if (!phoneNumber.startsWith('+')) {
-            phoneNumber = `+${phoneNumber}`;
-          }
-        } while (!await isValidPhoneNumber(phoneNumber)); // Validar número
-        rl.close(); // Cerrar readline después de obtener el número
-        addNumber = phoneNumber.replace(/\D/g, '');
-      }
+/**
+ * Función para reconectar un sub-bot y asignarle un manejador de mensajes.
+ * @param {string} botPath - Ruta completa a la carpeta de sesión del sub-bot.
+ */
+async function reconnectSubBot(botPath) {
+    console.log(chalk.yellow(`Intentando reconectar sub-bot en: ${path.basename(botPath)}`));
+    try {
+        const { state: subBotState, saveCreds: saveSubBotCreds } = await useMultiFileAuthState(botPath);
+        const subBotConn = makeWASocket({
+            version: version,
+            logger,
+            printQRInTerminal: false,
+            auth: {
+                creds: subBotState.creds,
+                keys: makeCacheableSignalKeyStore(subBotState.keys, logger),
+            },
+            browser: Browsers.ubuntu('Chrome'),
+            markOnlineOnclientect: false,
+            generateHighQualityLinkPreview: true,
+            syncFullHistory: true,
+            retryRequestDelayMs: 10,
+            transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 10 },
+            maxMsgRetryCount: 15,
+            appStateMacVerification: {
+                patch: false,
+                snapshot: false,
+            },
+            getMessage: async (key) => {
+                const jid = jidNormalizedUser(key.remoteJid);
+                const msg = await store.loadMessage(jid, key.id);
+                return msg?.message || '';
+            },
+        });
 
-      // Solicitar código de emparejamiento
-      setTimeout(async () => {
-        try {
-          let codigo = await conn.requestPairingCode(addNumber);
-          codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo;
-          console.log(chalk.yellow('Introduce el código de emparejamiento en WhatsApp.'));
-          console.log(chalk.black(chalk.bgGreen(`Su código de emparejamiento: `)), chalk.black(chalk.white(codigo)));
-        } catch (e) {
-          console.error(chalk.red(`Error al solicitar código de emparejamiento: ${e}`));
+        subBotConn.ev.on('connection.update', (update) => {
+            const { connection, lastDisconnect } = update;
+            if (connection === 'open') {
+                console.log(chalk.green(`Sub-bot conectado correctamente: ${path.basename(botPath)}`));
+            } else if (connection === 'close') {
+                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                console.error(chalk.red(`Sub-bot desconectado en ${path.basename(botPath)}. Razón: ${reason}`));
+                if (reason === 401) {
+  global.conns = global.conns.filter(conn => conn.user?.jid !== subBotConn.user?.jid);
+  console.log(chalk.red(`❌ Sub-bot removido de global.conns: ${subBotConn.user?.jid}`));
+}
+            }
+        });
+        subBotConn.ev.on('creds.update', saveSubBotCreds);
+
+        // ¡IMPORTANTE!: Asignar el manejador de mensajes al sub-bot
+        // Asumiendo que 'handler' es el objeto importado de handler.js y contiene la función handler.
+        if (handler && handler.handler) {
+            subBotConn.handler = handler.handler.bind(subBotConn);
+            subBotConn.ev.on('messages.upsert', subBotConn.handler);
+            console.log(chalk.blue(`Manejador asignado al sub-bot: ${path.basename(botPath)}`));
+        } else {
+            console.warn(chalk.yellow(`Advertencia: No se encontró el manejador para asignar al sub-bot: ${path.basename(botPath)}`));
         }
-      }, 2000);
+
+        // Guarda la conexión del sub-bot en un objeto global para acceso futuro si lo necesitas
+        if (!global.subBots) {
+            global.subBots = {};
+        }
+        global.subBots[path.basename(botPath)] = subBotConn;
+
+        // 🔥 Agregar también a global.conns para mostrar en listjadibot
+global.conns = global.conns || []
+
+const yaExiste = global.conns.some(c => c.user?.jid === subBotConn.user?.jid)
+if (!yaExiste) {
+  global.conns.push(subBotConn)
+  console.log(chalk.green(`🟢 Sub-bot agregado a global.conns: ${subBotConn.user?.jid}`))
+}
+
+    } catch (e) {
+        console.error(chalk.red(`Error al reconectar sub-bot en ${path.basename(botPath)}:`), e);
     }
+}
+
+
+async function handleLogin() {
+  if (conn.authState.creds.registered) {
+    console.log(chalk.green('Sesión ya registrada.'));
+    return;
+  }
+
+  let loginMethod = await question(
+  chalk.green(
+    `🔐 ¿Cómo quieres iniciar sesión, mi rey?\n` +
+    `📷 Escribe "qr" pa escanear el código QR alv\n` +
+    `🔢 O escribe "code" si quieres usar un código de 8 dígitos\n` +
+    `> `
+  )
+);
+
+  loginMethod = loginMethod.toLowerCase().trim();
+
+  if (loginMethod === 'code') {
+    let phoneNumber = await question(chalk.blue('Ingresa el número de WhatsApp donde estará el bot (incluye código país, ej: 521XXXXXXXXXX):\n'));
+    phoneNumber = phoneNumber.replace(/\D/g, ''); // Solo números
+
+    // Ajustes básicos para México (52)
+    if (phoneNumber.startsWith('52') && phoneNumber.length === 12) {
+      phoneNumber = `521${phoneNumber.slice(2)}`;
+    } else if (phoneNumber.startsWith('52')) {
+      phoneNumber = `521${phoneNumber.slice(2)}`;
+    } else if (phoneNumber.startsWith('0')) {
+      phoneNumber = phoneNumber.replace(/^0/, '');
+    }
+
+    if (typeof conn.requestPairingCode === 'function') {
+      try {
+        // Validar que la conexión esté abierta antes de solicitar código
+        if (conn.ws.readyState === ws.OPEN) {
+          let code = await conn.requestPairingCode(phoneNumber);
+          code = code?.match(/.{1,4}/g)?.join('-') || code;
+          console.log(chalk.cyan('Tu código de emparejamiento es:', code));
+        } else {
+          console.log(chalk.red('La conexión no está abierta. Intenta nuevamente.'));
+        }
+      } catch (e) {
+        console.log(chalk.red('Error al solicitar código de emparejamiento:'), e.message || e);
+      }
+    } else {
+      console.log(chalk.red('Tu versión de Baileys no soporta emparejamiento por código.'));
+    }
+  } else {
+    console.log(chalk.yellow('Generando código QR, escanéalo con tu WhatsApp...'));
+    conn.ev.on('connection.update', ({ qr }) => {
+      if (qr) qrcode.generate(qr, { small: true });
+    });
   }
 }
 
-conn.isInit = false;
-// conn.well ya no se usa, así que se elimina.
+await handleLogin();
 
-// Intervalos de mantenimiento (escritura de DB, limpieza de temporales, etc.)
+conn.isInit = false;
+conn.well = false;
+
 if (!opts['test']) {
   if (global.db) {
     setInterval(async () => {
       if (global.db.data) await global.db.write();
-      if (opts['autocleartmp'] && (global.support || {}).find) { // Asegura que support.find exista
-        const tmpPaths = [tmpdir(), 'tmp', 'serbot'];
-        tmpPaths.forEach((tmpPath) => {
-          if (existsSync(tmpPath)) { // Solo intentar si el directorio existe
-            spawn('find', [tmpPath, '-amin', '3', '-type', 'f', '-delete'], { stdio: 'inherit' }); // stdio: 'inherit' para ver errores de find
-          }
+      if (opts['autocleartmp']) {
+        const tmp = [tmpdir(), 'tmp', 'serbot'];
+        tmp.forEach((filename) => {
+          spawn('find', [filename, '-amin', '3', '-type', 'f', '-delete']);
         });
       }
-      purgeSession(); // Llama a la función de limpieza de sesión principal
-      purgeSessionSB(); // Llama a la función de limpieza de sesiones de sub-bots
-      purgeOldFiles(); // Llama a la función de limpieza de archivos antiguos
-    }, 30 * 1000); // Cada 30 segundos
+    }, 30 * 1000);
   }
 }
 
-// Inicio del servidor (si opts['server'] está activado)
-if (opts['server']) (await import('./server.js')).default(global.conn, PORT);
-
-// Funciones de limpieza de archivos (estas deberían estar definidas ANTES de ser llamadas en el setInterval)
 function clearTmp() {
   const tmp = [join(__dirname, './tmp')];
   const filename = [];
-  tmp.forEach((dirname) => {
-    if (existsSync(dirname)) {
-      readdirSync(dirname).forEach((file) => filename.push(join(dirname, file)));
-    }
-  });
+  tmp.forEach((dirname) => readdirSync(dirname).forEach((file) => filename.push(join(dirname, file))));
   return filename.map((file) => {
     const stats = statSync(file);
-    if (stats.isFile() && (Date.now() - stats.mtimeMs >= 1000 * 60 * 3)) { // 3 minutos
-      unlinkSync(file);
-      return true;
-    }
+    if (stats.isFile() && Date.now() - stats.mtimeMs >= 1000 * 60 * 3) return unlinkSync(file);
     return false;
   });
 }
 
-function purgeSession() {
-  let prekey = [];
-  // Asegurarse de que la carpeta 'sessions' existe
-  if (!existsSync("./sessions")) {
-    // console.log(chalk.cyanBright(`=> Directorio ./sessions no encontrado. No hay pre-keys que eliminar.`));
-    return;
-  }
-  let directorio = readdirSync("./sessions");
-  let filesFolderPreKeys = directorio.filter(file => {
-    return file.startsWith('pre-key-');
-  });
-  prekey = [...prekey, ...filesFolderPreKeys];
-  filesFolderPreKeys.forEach(files => {
-    try {
-      unlinkSync(`./sessions/${files}`);
-      // console.log(chalk.green(`  - Eliminado: ./sessions/${files}`));
-    } catch (e) {
-      console.error(chalk.red(`Error al eliminar ./sessions/${files}: ${e}`));
-    }
-  });
-  if (prekey.length > 0) {
-    console.log(chalk.cyanBright(`=> Eliminadas ${prekey.length} pre-keys de la sesión principal.`));
-  }
-}
+setInterval(() => {
+  if (global.stopped === 'close' || !conn || !conn.user) return;
+  clearTmp();
+}, 180000);
 
-function purgeSessionSB() {
-  try {
-    const serbotDir = './serbot';
-    if (!existsSync(serbotDir)) {
-      // console.log(chalk.cyanBright(`=> Directorio ./serbot no encontrado. No hay pre-keys de sub-bots que eliminar.`));
-      return;
-    }
-    let listaDirectorios = readdirSync(serbotDir);
-    let SBprekeyCount = 0; // Contador de pre-keys eliminadas de sub-bots
-    listaDirectorios.forEach(directorio => {
-      const fullDirPath = join(serbotDir, directorio);
-      if (statSync(fullDirPath).isDirectory()) {
-        let DSBPreKeys = readdirSync(fullDirPath).filter(fileInDir => {
-          return fileInDir.startsWith('pre-key-');
-        });
-        DSBPreKeys.forEach(fileInDir => {
-          try {
-            unlinkSync(join(fullDirPath, fileInDir));
-            SBprekeyCount++;
-            // console.log(chalk.green(`  - Eliminado: ${join(fullDirPath, fileInDir)}`));
-          } catch (e) {
-            console.error(chalk.red(`Error al eliminar ${join(fullDirPath, fileInDir)}: ${e}`));
-          }
-        });
-      }
-    });
-    if (SBprekeyCount > 0) {
-      console.log(chalk.cyanBright(`=> Eliminadas ${SBprekeyCount} pre-keys de sub-bots.`));
-    }
-  } catch (err) {
-    console.error(chalk.bold.red(`Algo salió mal durante la eliminación de pre-keys de sub-bots: `), err);
-  }
-}
-
-function purgeOldFiles() {
-  const directories = ['./sessions/', './serbot/'];
-  const oneHourAgo = Date.now() - (60 * 60 * 1000); // Una hora atrás
-  directories.forEach(dir => {
-    if (!existsSync(dir)) return; // Asegura que el directorio existe antes de leer
-    readdirSync(dir).forEach(file => {
-      const filePath = path.join(dir, file);
-      try { // Añadir try-catch para statSync también
-        const stats = statSync(filePath);
-        // Borrar solo archivos, no directorios, y que no sean 'creds.json' o 'bots.json'
-        if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json' && file !== 'bots.json') {
-          unlinkSync(filePath);
-          // console.log(chalk.bold.green(`Archivo ${file} borrado con éxito de ${dir}`));
-        }
-      } catch (err) {
-        console.error(chalk.red(`Error al procesar archivo ${filePath}:`), err);
-      }
-    });
-  });
-}
-
-
-// Manejador de actualización de conexión para el BOT PRINCIPAL
 async function connectionUpdate(update) {
   const { connection, lastDisconnect, isNewLogin } = update;
-  global.stopped = connection; // Almacena el estado de conexión globalmente
-  if (isNewLogin) conn.isInit = true; // Marca como inicializado tras nuevo login
-
-  const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
-
-  // Manejo de desconexiones
-  if (connection === 'close') {
-    let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-    console.log(chalk.red(`[BOT PRINCIPAL] Conexión cerrada. Razón: ${reason || 'Desconocida'} | Código: ${code || 'N/A'}`));
-
-    if (reason === DisconnectReason.badSession) {
-      conn.logger.error(`[BOT PRINCIPAL] Sesión incorrecta, por favor elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      rmSync(`./${global.authFile}`, { recursive: true, force: true }); // Eliminar sesión rota
-      process.exit(1); // Forzar la salida para que el usuario borre la sesión
-    } else if (reason === DisconnectReason.connectionClosed) {
-      conn.logger.warn(`[BOT PRINCIPAL] Conexión cerrada manualmente/remotamente, reconectando...`);
-      await global.reloadHandler(true).catch(console.error);
-    } else if (reason === DisconnectReason.connectionLost) {
-      conn.logger.warn(`[BOT PRINCIPAL] Conexión perdida con el servidor, reconectando...`);
-      await global.reloadHandler(true).catch(console.error);
-    } else if (reason === DisconnectReason.connectionReplaced) {
-      conn.logger.error(`[BOT PRINCIPAL] Conexión reemplazada (otra sesión abierta). Reiniciando...`);
-      // No borrar creds.json aquí si quieres que PM2 intente reiniciar con la misma sesión
-      // Pero si se repite, es mejor borrarla.
-      // if (fs.existsSync(`./${global.authFile}/creds.json`)) {
-      //   fs.unlinkSync(`./${global.authFile}/creds.json`);
-      // }
-      process.send('reset'); // Enviar señal de reinicio si se usa PM2
-    } else if (reason === DisconnectReason.loggedOut) {
-      conn.logger.error(`[BOT PRINCIPAL] Sesión cerrada (logged out). Por favor, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      rmSync(`./${global.authFile}`, { recursive: true, force: true }); // Eliminar sesión rota
-      process.exit(0); // Terminar el proceso si el bot se desloguea, requiere intervención manual
-    } else if (reason === DisconnectReason.restartRequired) {
-      conn.logger.info(`[BOT PRINCIPAL] Reinicio necesario. Reiniciando manejador...`);
-      await global.reloadHandler(true).catch(console.error);
-    } else if (reason === DisconnectReason.timedOut) {
-      conn.logger.warn(`[BOT PRINCIPAL] Tiempo de conexión agotado, reconectando...`);
-      await global.reloadHandler(true).catch(console.error);
-    } else {
-      conn.logger.warn(`[BOT PRINCIPAL] Razón de desconexión desconocida: ${reason || 'N/A'}. Reconectando...`);
-      await global.reloadHandler(true).catch(console.error);
-    }
-  } else if (connection === 'open') {
-    console.log(chalk.green('✅ [BOT PRINCIPAL] Conectado correctamente.'));
-    global.timestamp.connect = new Date(); // Actualiza el timestamp de conexión
+  global.stopped = connection;
+  if (isNewLogin) conn.isInit = true;
+  const code =
+    lastDisconnect?.error?.output?.statusCode ||
+    lastDisconnect?.error?.output?.payload?.statusCode;
+  if (code && code !== DisconnectReason.loggedOut && conn?.ws.socket == null) {
+    await global.reloadHandler(true).catch(console.error);
+    global.timestamp.connect = new Date();
   }
+  if (global.db.data == null) await loadDatabase();
+  if (connection === 'open') {
+    console.log(chalk.yellow('Conectado correctamente.'));
 
-  // Carga de base de datos si es nula (seguridad)
-  if (global.db.data == null) loadDatabase();
+    // --- Lógica de reconexión de sub-bots al iniciar el bot principal ---
+    const rutaJadiBot = join(__dirname, './JadiBots');
 
-  // Manejo de QR si aplica
-  // Este bloque puede ser redundante si el QR ya se mostró al inicio,
-  // pero lo mantenemos por si hay una reconexión que requiera un nuevo QR.
-  if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
-    if (opcion == '1' || methodCodeQR) {
-      console.log(chalk.yellow('Escanea el código QR del bot principal.'));
+    if (!existsSync(rutaJadiBot)) {
+        mkdirSync(rutaJadiBot, { recursive: true });
+        console.log(chalk.bold.cyan(`La carpeta: ${rutaJadiBot} se creó correctamente.`));
+    } else {
+        console.log(chalk.bold.cyan(`La carpeta: ${rutaJadiBot} ya está creada.`));
+    }
+
+    const readRutaJadiBot = readdirSync(rutaJadiBot);
+    if (readRutaJadiBot.length > 0) {
+        const credsFile = 'creds.json';
+        for (const subBotDir of readRutaJadiBot) {
+            const botPath = join(rutaJadiBot, subBotDir);
+            const readBotPath = readdirSync(botPath);
+            if (readBotPath.includes(credsFile)) {
+                // Llama a la función para reconectar cada sub-bot
+                await reconnectSubBot(botPath);
+            }
+        }
+    }
+    // --- Fin de la lógica de reconexión de sub-bots ---
+
+  }
+  const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+  if (reason === 405) {
+    if (existsSync('./sessions/creds.json')) unlinkSync('./sessions/creds.json');
+    console.log(
+      chalk.bold.redBright(
+        `Conexión reemplazada, por favor espera un momento. Reiniciando...\nSi aparecen errores, vuelve a iniciar con: npm start`
+      )
+    );
+    process.send('reset');
+  }
+  if (connection === 'close') {
+    switch (reason) {
+      case DisconnectReason.badSession:
+        conn.logger.error(`Sesión incorrecta, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
+        break;
+      case DisconnectReason.connectionClosed:
+      case DisconnectReason.connectionLost:
+      case DisconnectReason.timedOut:
+        conn.logger.warn(`Conexión perdida o cerrada, reconectando...`);
+        await global.reloadHandler(true).catch(console.error);
+        break;
+      case DisconnectReason.connectionReplaced:
+        conn.logger.error(
+          `Conexión reemplazada, se abrió otra sesión. Cierra esta sesión primero.`
+        );
+        break;
+      case DisconnectReason.loggedOut:
+        conn.logger.error(`Sesión cerrada, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
+        break;
+      case DisconnectReason.restartRequired:
+        conn.logger.info(`Reinicio necesario, reinicia el servidor si hay problemas.`);
+        await global.reloadHandler(true).catch(console.error);
+        break;
+      default:
+        conn.logger.warn(`Desconexión desconocida: ${reason || ''} - Estado: ${connection || ''}`);
+        await global.reloadHandler(true).catch(console.error);
+        break;
     }
   }
 }
 
-// Captura de excepciones no controladas
-process.on('uncaughtException', (err) => {
-    console.error(chalk.red('[UNCAUGHT EXCEPTION]'), err);
-    // Considerar un reinicio controlado o salida si el error es fatal.
-    // process.exit(1);
-});
+process.on('uncaughtException', console.error);
 
 let isInit = true;
-let handler = {}; // Inicializar como objeto vacío
+// La importación de handler.js debe hacerse antes de que se use en reconnectSubBot
+let handler = await import('./handler.js'); // Asegúrate que esta línea esté aquí
 
-global.reloadHandler = async function (restatConn) {
-  console.log(chalk.yellow('[RELOAD HANDLER] Recargando manejadores...'));
+global.reloadHandler = async function (restartConn) {
   try {
-    // Intenta importar una nueva versión del manejador para refrescarlo
-    const Handler = await import(`./handler.js?update=${Date.now()}`).catch(err => {
-      console.error(chalk.red(`[RELOAD HANDLER] Error al importar nuevo manejador: ${err}`));
-      return null;
-    });
-    if (Handler && Object.keys(Handler || {}).length && Handler.default) { // Asegurarse de que Handler.default exista
-      handler = Handler.default; // Asignar el default export
-      console.log(chalk.green('[RELOAD HANDLER] Manejador principal actualizado.'));
-    } else {
-      console.warn(chalk.yellow('[RELOAD HANDLER] No se pudo actualizar el manejador. Usando la versión existente (si la hay).'));
-      // Si no se pudo actualizar, y 'handler' está vacío, intentar cargar el original una vez
-      if (Object.keys(handler).length === 0) {
-        handler = (await import('./handler.js')).default;
-        console.log(chalk.green('[RELOAD HANDLER] Cargado manejador original.'));
-      }
-    }
+    const Handler = await import(`./handler.js?update=${Date.now()}`).catch(console.error);
+    if (Handler && Object.keys(Handler).length) handler = Handler;
   } catch (e) {
-    console.error(chalk.red(`[RELOAD HANDLER] Error general al recargar el manejador: ${e}`));
+    console.error(e);
   }
 
-  // Reiniciar la conexión principal si se solicita
-  if (restatConn) {
-    console.log(chalk.blue('[RELOAD HANDLER] Reiniciando conexión principal...'));
-    const oldChats = global.conn?.chats; // Obtener chats existentes si la conexión ya existe
+  if (restartConn) {
     try {
-      global.conn?.ws?.close(); // Cierra el WebSocket existente de forma segura
-    } catch (e) {
-      console.error(chalk.red(`[RELOAD HANDLER] Error al cerrar el WebSocket principal: ${e}`));
-    }
-    global.conn?.ev?.removeAllListeners(); // Elimina todos los listeners antiguos de forma segura
-    global.conn = makeWASocket(connectionOptions, { chats: oldChats }); // Crea una nueva instancia de conexión
+      if (global.conn.ws) global.conn.ws.close();
+    } catch {}
+    global.conn.ev.removeAllListeners();
+    global.conn = makeWASocket(connectionOptions);
     isInit = true;
-    console.log(chalk.green('[RELOAD HANDLER] Nueva conexión principal creada.'));
   }
 
-  // Desvincular manejadores antiguos si no es la primera inicialización
-  if (!isInit && global.conn) { // Asegurarse de que global.conn exista
-    if (global.conn.handler) global.conn.ev.off('messages.upsert', global.conn.handler);
-    if (global.conn.connectionUpdate) global.conn.ev.off('connection.update', global.conn.connectionUpdate);
-    if (global.conn.credsUpdate) global.conn.ev.off('creds.update', global.conn.credsUpdate);
-    console.log(chalk.yellow('[RELOAD HANDLER] Manejadores antiguos del bot principal desvinculados.'));
+  if (!isInit) {
+    conn.ev.off('messages.upsert', conn.handler);
+    conn.ev.off('connection.update', conn.connectionUpdate);
+    conn.ev.off('creds.update', conn.credsUpdate);
   }
 
-  // Vincular nuevos manejadores al bot principal
-  if (global.conn && handler && handler.handler) { // Asegurarse de que handler.handler exista
-    global.conn.handler = handler.handler.bind(global.conn);
-    global.conn.connectionUpdate = connectionUpdate.bind(global.conn);
-    global.conn.credsUpdate = saveCreds.bind(global.conn); // Usa saveCreds directamente
+  conn.handler = handler.handler.bind(global.conn);
+  conn.connectionUpdate = connectionUpdate.bind(global.conn);
+  conn.credsUpdate = saveCreds.bind(global.conn, true);
 
-    global.conn.ev.on('messages.upsert', global.conn.handler);
-    global.conn.ev.on('connection.update', global.conn.connectionUpdate);
-    global.conn.ev.on('creds.update', global.conn.credsUpdate);
-    isInit = false;
-    console.log(chalk.green('[RELOAD HANDLER] Manejadores del bot principal vinculados.'));
-  } else {
-    console.error(chalk.red('[RELOAD HANDLER] Error: No se pudo vincular manejadores al bot principal. Handler no válido.'));
-  }
+  conn.ev.on('messages.upsert', conn.handler);
+  conn.ev.on('connection.update', conn.connectionUpdate);
+  conn.ev.on('creds.update', conn.credsUpdate);
 
-
-  // Re-adjuntar manejadores para sub-bots también en caso de reloadHandler
-  console.log(chalk.magenta('[RELOAD HANDLER] Re-adjuntando manejadores a los sub-bots existentes...'));
-  for (const subBotId in global.conns) {
-    const subConn = global.conns[subBotId];
-    if (subConn && subConn.ev && handler && handler.handler) { // Asegurarse de que handler.handler exista
-      // Remover oyentes antiguos para evitar duplicados
-      if (subConn.handler) subConn.ev.off('messages.upsert', subConn.handler);
-      // Adjuntar el manejador (usamos el mismo manejador principal para simplicidad)
-      subConn.handler = handler.handler.bind(subConn);
-      subConn.ev.on('messages.upsert', subConn.handler);
-      console.log(chalk.magenta(`[RELOAD HANDLER] Manejador re-adjuntado para el sub-bot: ${subBotId}`));
-    } else {
-        console.warn(chalk.yellow(`[RELOAD HANDLER] Sub-bot ${subBotId} no tiene objeto 'conn' o 'ev' válido, o el manejador principal es inválido. Saltando.`));
-    }
-  }
-  console.log(chalk.magenta('[RELOAD HANDLER] Finalizado re-adjuntar manejadores a sub-bots.'));
-
+  isInit = false;
   return true;
 };
 
-// Carga de plugins
-const pluginFolder = global.__dirname(join(__dirname, './plugins')); // Ruta correcta a la carpeta de plugins
+const pluginFolder = global.__dirname(join(__dirname, './plugins/index'));
 const pluginFilter = (filename) => /\.js$/.test(filename);
 global.plugins = {};
-async function filesInit() {
-  console.log(chalk.blue('[PLUGINS] Cargando plugins...'));
-  // Asegurarse de que el directorio de plugins existe
-  if (!existsSync(pluginFolder)) {
-    console.warn(chalk.yellow(`[PLUGINS] El directorio de plugins '${pluginFolder}' no existe. No se cargarán plugins.`));
-    return;
-  }
 
+async function filesInit() {
   for (const filename of readdirSync(pluginFolder).filter(pluginFilter)) {
     try {
       const file = global.__filename(join(pluginFolder, filename));
       const module = await import(file);
-      // Asegurarse de que el módulo tiene una exportación por defecto o un objeto válido
-      if (module.default || Object.keys(module).length > 0) {
-        global.plugins[filename] = module.default || module;
-        console.log(chalk.green(`[PLUGINS] Cargado: ${filename}`));
-      } else {
-        console.warn(chalk.yellow(`[PLUGINS] El plugin '${filename}' no tiene una exportación válida (default o nombrada).`));
-      }
+      global.plugins[filename] = module.default || module;
     } catch (e) {
-      console.error(chalk.red(`[PLUGINS] Error al cargar el plugin '${filename}':`), e);
+      conn.logger.error(e);
       delete global.plugins[filename];
     }
   }
-  console.log(chalk.blue(`[PLUGINS] ${Object.keys(global.plugins).length} plugins cargados.`));
 }
-filesInit().then((_) => Object.keys(global.plugins)).catch(console.error);
+await filesInit();
 
-// Recarga de plugins en tiempo real
 global.reload = async (_ev, filename) => {
   if (pluginFilter(filename)) {
     const dir = global.__filename(join(pluginFolder, filename), true);
     if (filename in global.plugins) {
-      if (existsSync(dir)) console.log(chalk.blue(`[WATCH] Plugin actualizado - '${filename}'`));
+      if (existsSync(dir)) conn.logger.info(`Updated plugin - '${filename}'`);
       else {
-        console.warn(chalk.yellow(`[WATCH] Plugin eliminado - '${filename}'`));
+        conn.logger.warn(`Deleted plugin - '${filename}'`);
         return delete global.plugins[filename];
       }
-    } else console.log(chalk.green(`[WATCH] Nuevo plugin - '${filename}'`));
+    } else conn.logger.info(`New plugin - '${filename}'`);
+
     const err = syntaxerror(readFileSync(dir), filename, {
       sourceType: 'module',
       allowAwaitOutsideFunction: true,
     });
-    if (err) console.error(chalk.red(`[WATCH] Error de sintaxis al cargar '${filename}':\n${format(err)}`));
+    if (err) conn.logger.error(`Syntax error while loading '${filename}':\n${format(err)}`);
     else {
       try {
-        const module = (await import(`${global.__filename(dir)}?update=${Date.now()}`)); // Forzar recarga
-        if (module.default || Object.keys(module).length > 0) {
-          global.plugins[filename] = module.default || module;
-        } else {
-          console.warn(chalk.yellow(`[WATCH] El plugin '${filename}' actualizado no tiene una exportación válida.`));
-          delete global.plugins[filename];
-        }
+        const module = await import(`${global.__filename(dir)}?update=${Date.now()}`);
+        global.plugins[filename] = module.default || module;
       } catch (e) {
-        console.error(chalk.red(`[WATCH] Error al requerir el plugin '${filename}':\n${format(e)}`));
-        delete global.plugins[filename]; // Eliminar el plugin si falla al requerir
+        conn.logger.error(`Error requiring plugin '${filename}':\n${format(e)}`);
       } finally {
         global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)));
       }
     }
   }
 };
-Object.freeze(global.reload); // Evitar que global.reload sea modificado
-watch(pluginFolder, global.reload); // Observar cambios en la carpeta de plugins
+Object.freeze(global.reload);
 
-// --- Gestión de Sub-bots ---
-global.conns = {}; // Objeto global para almacenar las conexiones de los sub-bots
-
-// Nueva función para iniciar o reiniciar un sub-bot específico
-async function initSubBot(subBotId) {
-  const serbotDir = './serbot';
-  const subBotAuthFile = join(serbotDir, subBotId);
-
-  // Asegurarse de que el directorio del sub-bot existe
-  if (!existsSync(subBotAuthFile)) {
-    console.error(chalk.red(`[SUB-BOT-INIT] Directorio de sesión no encontrado para ${subBotId}: ${subBotAuthFile}. Eliminando de bots.json.`));
-    removeConnectedSubBot(subBotId); // Eliminar del bots.json si el directorio no existe
-    return;
-  }
-
-  console.log(chalk.blue(`[SUB-BOT-INIT] Intentando iniciar/reiniciar sub-bot: ${subBotId}`));
-
-  try {
-    // Si la conexión ya existe, la cerramos limpiamente para un reinicio
-    if (global.conns[subBotId] && global.conns[subBotId].ws && global.conns[subBotId].ws.close) {
-      console.log(chalk.yellow(`[SUB-BOT-INIT] Cerrando conexión existente para ${subBotId} antes de reiniciar...`));
-      global.conns[subBotId].ev.removeAllListeners(); // Limpiar listeners antiguos
-      await global.conns[subBotId].ws.close().catch(e => console.error(chalk.red(`Error al cerrar ws para ${subBotId}: ${e}`)));
-      // No eliminamos de global.conns aquí para mantener la referencia mientras se reinicia
-    }
-
-    const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
-
-    const subConnOptions = {
-      logger: pino({ level: 'info' }), // <<--- Nivel de log 'info' es CRÍTICO para depuración de sub-bots.
-      printQRInTerminal: false,
-      mobile: MethodMobile,
-      browser: [`Sub-Bot ${subBotId}`, 'Chrome', '110.0.5585.95'],
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
-      },
-      markOnlineOnConnect: true,
-      generateHighQualityLinkPreview: true,
-      getMessage: async (clave) => {
-        // Asegurarse de que 'store' y 'store.loadMessage' existen antes de usarlos
-        if (store && typeof store.loadMessage === 'function') {
-          let jid = jidNormalizedUser(clave.remoteJid);
-          let msg = await store.loadMessage(jid, clave.id);
-          return msg?.message || "";
-        } else {
-          console.error(chalk.red(`[SUB-BOT] Error para ${subBotId}: 'store' o 'store.loadMessage' no están definidos o no son una función.`));
-          return "";
-        }
-      },
-      msgRetryCounterCache,
-      msgRetryCounterMap,
-      defaultQueryTimeoutMs: undefined,
-      version: [2, 3000, 1023223821], // Versión de Baileys, considera actualizar si hay problemas
-    };
-
-    const subConn = makeWASocket(subConnOptions);
-    global.conns[subBotId] = subConn; // Asegura que la conexión está en global.conns desde el inicio
-
-    // --- MANEJADOR DE ACTUALIZACIÓN DE CONEXIÓN PARA CADA SUB-BOT ---
-    subConn.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, isNewLogin } = update;
-      const subBotName = `Sub-Bot [${subBotId}]`;
-
-      console.log(chalk.magenta(`[DEBUG-SUBBOT] ${subBotName} - Connection Update Received:`));
-      console.log(chalk.magenta(`  - Status: '${connection}'`));
-      console.log(chalk.magenta(`  - lastDisconnect error: ${JSON.stringify(lastDisconnect?.error?.message || lastDisconnect?.error || 'N/A')}`));
-      console.log(chalk.magenta(`  - isNewLogin: ${isNewLogin}`));
-      console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws?.socket ? subConn.ws.socket.readyState : 'No socket object'}`));
-      console.log(chalk.magenta(`  - conn.connection actual: '${subConn.connection}' (debería ser el mismo que 'status')`));
-
-      if (isNewLogin) {
-        console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente.`));
-        // Adjuntar el manejador de mensajes si aún no está adjunto
-        if (!subConn.handler && handler && handler.handler) {
-          subConn.handler = handler.handler.bind(subConn);
-          subConn.ev.on('messages.upsert', subConn.handler);
-          console.log(chalk.green(`${subBotName}: Manejador de mensajes adjuntado.`));
-        } else if (!handler || !handler.handler) {
-            console.warn(chalk.yellow(`${subBotName}: Manejador principal (handler.js) no válido. No se puede adjuntar manejador de mensajes.`));
-        }
-      }
-
-      if (connection === 'open') {
-        console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
-        addConnectedSubBot(subBotId); // Añadir a bots.json
-        if (!subConn.handler && handler && handler.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene (ej. tras una reconexión)
-          subConn.handler = handler.handler.bind(subConn);
-          subConn.ev.on('messages.upsert', subConn.handler);
-          console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión/reinicio.`));
-        }
-      } else if (connection === 'close') {
-        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-        console.error(chalk.red(`${subBotName}: Conexión cerrada. Razón: ${reason || 'Desconocida'}.`));
-
-        // Remover el manejador de eventos y la referencia para liberar recursos ANTES de intentar reiniciar
-        if (subConn.handler) {
-          subConn.ev.off('messages.upsert', subConn.handler);
-          delete subConn.handler;
-        }
-        subConn.ev.removeAllListeners(); // Eliminar todos los listeners
-        // No eliminar de global.conns aquí si vas a intentar reiniciar,
-        // ya que la referencia es necesaria para el setTimeout.
-
-        if (reason === DisconnectReason.loggedOut) {
-          console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
-          removeConnectedSubBot(subBotId); // Eliminar de bots.json
-          delete global.conns[subBotId]; // Eliminar permanentemente de global.conns
-          console.log(chalk.red(`${subBotName}: Eliminado permanentemente de global.conns debido a loggedOut.`));
-          rmSync(subBotAuthFile, { recursive: true, force: true }); // Borrar la sesión rota.
-        } else {
-          // Para otras razones de desconexión, intentamos un reinicio con un pequeño retardo
-          console.warn(chalk.yellow(`${subBotName}: Se desconectó (${reason}). Intentando reiniciar en 5 segundos...`));
-          setTimeout(() => initSubBot(subBotId), 5000); // Reintentar la inicialización
-        }
-      }
-    });
-
-    // Manejador de actualización de credenciales del sub-bot
-    subConn.ev.on('creds.update', saveSubCreds);
-
-  } catch (e) {
-    console.error(chalk.red(`[SUB-BOT-INIT] Fallo crítico al iniciar el sub-bot ${subBotId}:`), e);
-    // Si falla el inicio, intentar de nuevo después de un retardo
-    console.warn(chalk.yellow(`[SUB-BOT-INIT] Reintentando iniciar ${subBotId} en 10 segundos debido a un error...`));
-    setTimeout(() => initSubBot(subBotId), 10000);
-  }
-}
-
-// Función principal para iniciar todos los sub-bots
-async function startSubBots() {
-  const serbotDir = './serbot';
-  if (!existsSync(serbotDir)) {
-    console.warn(chalk.yellow(`[SUB-BOTS] El directorio '${serbotDir}' no existe. No hay sub-bots para iniciar.`));
-    return;
-  }
-
-  // Obtener IDs de sub-bots tanto de los directorios como de bots.json
-  const subBotIdsFromDirs = readdirSync(serbotDir).filter(f => statSync(join(serbotDir, f)).isDirectory());
-  const allSubBotIdsToProcess = [...new Set([...subBotIdsFromDirs, ...connectedSubBots])]; // Combina y elimina duplicados
-
-  if (allSubBotIdsToProcess.length === 0) {
-      console.log(chalk.blue(`[SUB-BOTS] No se encontraron directorios de sub-bots en '${serbotDir}' ni en bots.json.`));
-      return;
-  }
-
-  console.log(chalk.blue(`[SUB-BOTS] Iniciando proceso de carga para ${allSubBotIdsToProcess.length} sub-bots (dir y bots.json)...`));
-
-  // Iniciar cada sub-bot
-  for (const subBotId of allSubBotIdsToProcess) {
-    await initSubBot(subBotId); // Usa await para asegurar que se procese uno por uno o usa Promise.all para concurrencia
-  }
-}
-// --- Fin Gestión de Sub-bots ---
-
-// Iniciar el manejador del bot principal y luego los sub-bots
+watch(pluginFolder, global.reload);
 await global.reloadHandler();
-startSubBots().catch(console.error); // Ejecuta la función para iniciar los sub-bots
-
-// --- Funciones de soporte y limpieza ---
-async function _quickTest() {
-  // Esta función parece ser un marcador de posición, puedes eliminarla o implementarla.
-  console.log(chalk.gray('')); // Mantiene la línea 678
-}
