@@ -1,11 +1,11 @@
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
-import './config.js';
+import './config.js'; // Asegúrate de que config.js existe y define global.botnumber si lo usas.
 import { createRequire } from 'module';
 import path, { join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { platform } from 'process';
 import * as ws from 'ws'; // Importar 'ws' como módulo
-import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, rmSync, watch, stat } from 'fs';
+import { readdirSync, statSync, unlinkSync, existsSync, readFileSync, writeFileSync, rmSync, watch, stat } from 'fs'; // Asegúrate de tener writeFileSync
 import yargs from 'yargs';
 import { spawn } from 'child_process';
 import lodash from 'lodash';
@@ -13,24 +13,23 @@ import chalk from 'chalk'; // Asegúrate de que 'chalk' esté instalado (npm ins
 import syntaxerror from 'syntax-error';
 import { tmpdir } from 'os';
 import { format } from 'util';
-// Ya están importados pino de diversas formas, mantendremos la más común
 import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import { makeWASocket, protoType, serialize } from './lib/simple.js';
 import { Low, JSONFile } from 'lowdb';
 import { mongoDB, mongoDBV2 } from './lib/mongoDB.js'; // Asegúrate de que estos módulos existen si los usas
-import store from './lib/store.js'; // Asegúrate de que este módulo existe
+import store from './lib/store.js'; // Asegúrate de que este módulo existe y es CORRECTO
 const { proto } = (await import('@whiskeysockets/baileys')).default;
 import pkg from 'google-libphonenumber';
 const { PhoneNumberUtil } = pkg;
 const phoneUtil = PhoneNumberUtil.getInstance();
 const { DisconnectReason, useMultiFileAuthState, MessageRetryMap, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys');
 import readline from 'readline';
-import NodeCache from 'node-cache';
+import NodeCache from 'node-cache'; // Importa NodeCache
 const { CONNECTING } = ws; // Obtener CONNECTING del import * as ws
 const { chain } = lodash;
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
-import fs from 'fs'; // Importar 'fs' explícitamente
+// No es necesario importar 'fs' de nuevo, ya está en la línea 9.
 
 // Extender prototipos y serializar mensajes
 protoType();
@@ -59,8 +58,8 @@ global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse()
 global.prefix = new RegExp('^[' + (opts['prefix'] || '‎z/#$%.\\-').replace(/[|\\{}()[\]^$+*?.\-\^]/g, '\\$&') + ']');
 
 // Configuración de la base de datos (LowDB)
-global.db = new Low(/https?:\/\//.test(opts['db'] || '') ? new cloudDBAdapter(opts['db']) : new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`));
-
+// Nota: 'cloudDBAdapter' no está definido aquí, asegúrate de que se importe si lo necesitas.
+global.db = new Low(/https?:\/\//.test(opts['db'] || '') ? new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`) : new JSONFile(`${opts._[0] ? opts._[0] + '_' : ''}database.json`)); // Asumiendo JSONFile si no hay cloudDBAdapter
 global.DATABASE = global.db;
 global.loadDatabase = async function loadDatabase() {
   if (global.db.READ) return new Promise((resolve) => setInterval(async function () {
@@ -96,6 +95,10 @@ const loadConnectedSubBots = () => {
     if (existsSync(botsJsonPath)) {
         try {
             connectedSubBots = JSON.parse(readFileSync(botsJsonPath, 'utf8'));
+            if (!Array.isArray(connectedSubBots)) { // Asegurar que es un array
+                console.error(chalk.red('[BOTS.JSON] bots.json no es un array válido. Se inicializa vacío.'));
+                connectedSubBots = [];
+            }
             console.log(chalk.blue(`[BOTS.JSON] ${connectedSubBots.length} sub-bots conectados cargados desde ${botsJsonPath}.`));
         } catch (e) {
             console.error(chalk.red(`[BOTS.JSON] Error al leer bots.json: ${e}. Se inicializa vacío.`));
@@ -104,6 +107,7 @@ const loadConnectedSubBots = () => {
     } else {
         console.log(chalk.blue(`[BOTS.JSON] bots.json no encontrado, se creará uno nuevo.`));
         connectedSubBots = [];
+        saveConnectedSubBots(); // Crear el archivo vacío si no existe
     }
 };
 
@@ -111,7 +115,7 @@ const loadConnectedSubBots = () => {
 const saveConnectedSubBots = () => {
     try {
         writeFileSync(botsJsonPath, JSON.stringify(connectedSubBots, null, 2), 'utf8');
-        console.log(chalk.green(`[BOTS.JSON] Lista de sub-bots conectados guardada en ${botsJsonPath}.`));
+        // console.log(chalk.green(`[BOTS.JSON] Lista de sub-bots conectados guardada en ${botsJsonPath}.`)); // Descomentar para logs frecuentes
     } catch (e) {
         console.error(chalk.red(`[BOTS.JSON] Error al guardar bots.json: ${e}`));
     }
@@ -140,11 +144,10 @@ loadConnectedSubBots(); // Cargar al inicio
 
 
 // Configuración de autenticación de Baileys
-global.authFile = `sessions`;
+global.authFile = `sessions`; // O la ruta que uses para la sesión principal
 const { state, saveState, saveCreds } = await useMultiFileAuthState(global.authFile);
-// Aquí 'MessageRetryMap' debería ser un objeto o null, no una función
-const msgRetryCounterMap = {}; 
-const msgRetryCounterCache = new NodeCache();
+const msgRetryCounterMap = {}; // Debe ser un objeto
+const msgRetryCounterCache = new NodeCache(); // Correctamente inicializado
 const { version } = await fetchLatestBaileysVersion();
 let phoneNumber = global.botnumber; // Asegúrate de que global.botnumber esté definido en config.js o similar
 
@@ -159,19 +162,31 @@ let opcion;
 if (methodCodeQR) {
   opcion = '1';
 }
-if (!methodCodeQR && !methodCode && !fs.existsSync(`./${authFile}/creds.json`)) {
+// Si no hay creds y no se especificó un método por línea de comandos, preguntar al usuario
+if (!methodCodeQR && !methodCode && !fs.existsSync(`./${global.authFile}/creds.json`)) { // Usar global.authFile
   do {
     opcion = await question('Seleccione una opción:\n1. Con código QR\n2. Con código de texto de 8 dígitos\n---> ');
 
     if (!/^[1-2]$/.test(opcion)) {
       console.log('Por favor, seleccione solo 1 o 2.\n');
     }
-  } while (opcion !== '1' && opcion !== '2' || fs.existsSync(`./${authFile}/creds.json`));
+  } while (!/^[1-2]$/.test(opcion) || fs.existsSync(`./${global.authFile}/creds.json`)); // Usar global.authFile
 }
 
 // Silenciar logs de consola de pino (para evitar spam del bot principal en producción, sub-bots usarán 'info')
 // Si quieres ver los logs del bot principal, cambia 'silent' a 'info' o 'debug'
 // console.info = () => { }; // Comentar o eliminar esta línea para ver los logs del bot principal
+
+// Función para validar número de teléfono (asumiendo que quieres usar google-libphonenumber)
+async function isValidPhoneNumber(phoneNumber) {
+    try {
+        const number = phoneUtil.parseAndKeepRawInput(phoneNumber);
+        return phoneUtil.isValidNumber(number);
+    } catch (e) {
+        return false;
+    }
+}
+
 
 // Opciones de conexión para el bot principal
 const connectionOptions = {
@@ -186,9 +201,15 @@ const connectionOptions = {
   markOnlineOnConnect: true,
   generateHighQualityLinkPreview: true,
   getMessage: async (clave) => {
-    let jid = jidNormalizedUser(clave.remoteJid);
-    let msg = await store.loadMessage(jid, clave.id);
-    return msg?.message || "";
+    // Asegurarse de que 'store' y 'store.loadMessage' existen antes de usarlos
+    if (store && typeof store.loadMessage === 'function') {
+      let jid = jidNormalizedUser(clave.remoteJid);
+      let msg = await store.loadMessage(jid, clave.id);
+      return msg?.message || "";
+    } else {
+      console.error(chalk.red("[BOT PRINCIPAL] Error: 'store' o 'store.loadMessage' no están definidos o no son una función."));
+      return ""; // Devuelve vacío si store no está listo
+    }
   },
   msgRetryCounterCache,
   msgRetryCounterMap,
@@ -199,47 +220,59 @@ const connectionOptions = {
 global.conn = makeWASocket(connectionOptions);
 
 // Lógica para código de emparejamiento (opción 2)
-if (!fs.existsSync(`./${authFile}/creds.json`)) {
+if (!fs.existsSync(`./${global.authFile}/creds.json`)) { // Usar global.authFile
   if (opcion === '2' || methodCode) {
-    opcion = '2';
+    // Si la opción es 2 y no hay credenciales registradas
     if (!conn.authState.creds.registered) {
       let addNumber;
-      if (!!phoneNumber) {
+      if (!!phoneNumber) { // Si el número ya está definido (ej. desde config.js)
         addNumber = phoneNumber.replace(/[^0-9]/g, '');
-      } else {
+      } else { // Si el número no está definido, pedirlo
         do {
           phoneNumber = await question(chalk.bgBlack(chalk.bold.yellowBright('Por favor, escriba su número de WhatsApp.\nEjemplo: 51955918117\n')));
           phoneNumber = phoneNumber.replace(/\D/g, '');
           if (!phoneNumber.startsWith('+')) {
             phoneNumber = `+${phoneNumber}`;
           }
-        } while (!await isValidPhoneNumber(phoneNumber));
-        rl.close();
+        } while (!await isValidPhoneNumber(phoneNumber)); // Validar número
+        rl.close(); // Cerrar readline después de obtener el número
         addNumber = phoneNumber.replace(/\D/g, '');
+      }
 
-        setTimeout(async () => {
+      // Solicitar código de emparejamiento
+      setTimeout(async () => {
+        try {
           let codigo = await conn.requestPairingCode(addNumber);
           codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo;
           console.log(chalk.yellow('Introduce el código de emparejamiento en WhatsApp.'));
           console.log(chalk.black(chalk.bgGreen(`Su código de emparejamiento: `)), chalk.black(chalk.white(codigo)));
-        }, 2000);
-      }
+        } catch (e) {
+          console.error(chalk.red(`Error al solicitar código de emparejamiento: ${e}`));
+        }
+      }, 2000);
     }
   }
 }
 
 conn.isInit = false;
-// conn.well = false; // Esta variable no se utiliza y puede eliminarse si no tienes un uso específico para ella
+// conn.well ya no se usa, así que se elimina.
 
 // Intervalos de mantenimiento (escritura de DB, limpieza de temporales, etc.)
 if (!opts['test']) {
   if (global.db) {
     setInterval(async () => {
       if (global.db.data) await global.db.write();
-      if (opts['autocleartmp'] && (global.support || {}).find) {
+      if (opts['autocleartmp'] && (global.support || {}).find) { // Asegura que support.find exista
         const tmpPaths = [tmpdir(), 'tmp', 'serbot'];
-        tmpPaths.forEach((tmpPath) => spawn('find', [tmpPath, '-amin', '3', '-type', 'f', '-delete']));
+        tmpPaths.forEach((tmpPath) => {
+          if (existsSync(tmpPath)) { // Solo intentar si el directorio existe
+            spawn('find', [tmpPath, '-amin', '3', '-type', 'f', '-delete'], { stdio: 'inherit' }); // stdio: 'inherit' para ver errores de find
+          }
+        });
       }
+      purgeSession(); // Llama a la función de limpieza de sesión principal
+      purgeSessionSB(); // Llama a la función de limpieza de sesiones de sub-bots
+      purgeOldFiles(); // Llama a la función de limpieza de archivos antiguos
     }, 30 * 1000); // Cada 30 segundos
   }
 }
@@ -247,11 +280,15 @@ if (!opts['test']) {
 // Inicio del servidor (si opts['server'] está activado)
 if (opts['server']) (await import('./server.js')).default(global.conn, PORT);
 
-// Funciones de limpieza de archivos
+// Funciones de limpieza de archivos (estas deberían estar definidas ANTES de ser llamadas en el setInterval)
 function clearTmp() {
   const tmp = [join(__dirname, './tmp')];
   const filename = [];
-  tmp.forEach((dirname) => readdirSync(dirname).forEach((file) => filename.push(join(dirname, file))));
+  tmp.forEach((dirname) => {
+    if (existsSync(dirname)) {
+      readdirSync(dirname).forEach((file) => filename.push(join(dirname, file)));
+    }
+  });
   return filename.map((file) => {
     const stats = statSync(file);
     if (stats.isFile() && (Date.now() - stats.mtimeMs >= 1000 * 60 * 3)) { // 3 minutos
@@ -264,38 +301,60 @@ function clearTmp() {
 
 function purgeSession() {
   let prekey = [];
+  // Asegurarse de que la carpeta 'sessions' existe
+  if (!existsSync("./sessions")) {
+    // console.log(chalk.cyanBright(`=> Directorio ./sessions no encontrado. No hay pre-keys que eliminar.`));
+    return;
+  }
   let directorio = readdirSync("./sessions");
   let filesFolderPreKeys = directorio.filter(file => {
     return file.startsWith('pre-key-');
   });
   prekey = [...prekey, ...filesFolderPreKeys];
   filesFolderPreKeys.forEach(files => {
-    unlinkSync(`./sessions/${files}`);
+    try {
+      unlinkSync(`./sessions/${files}`);
+      // console.log(chalk.green(`  - Eliminado: ./sessions/${files}`));
+    } catch (e) {
+      console.error(chalk.red(`Error al eliminar ./sessions/${files}: ${e}`));
+    }
   });
+  if (prekey.length > 0) {
+    console.log(chalk.cyanBright(`=> Eliminadas ${prekey.length} pre-keys de la sesión principal.`));
+  }
 }
 
 function purgeSessionSB() {
   try {
-    let listaDirectorios = readdirSync('./serbot/');
-    let SBprekey = [];
+    const serbotDir = './serbot';
+    if (!existsSync(serbotDir)) {
+      // console.log(chalk.cyanBright(`=> Directorio ./serbot no encontrado. No hay pre-keys de sub-bots que eliminar.`));
+      return;
+    }
+    let listaDirectorios = readdirSync(serbotDir);
+    let SBprekeyCount = 0; // Contador de pre-keys eliminadas de sub-bots
     listaDirectorios.forEach(directorio => {
-      if (statSync(`./serbot/${directorio}`).isDirectory()) {
-        let DSBPreKeys = readdirSync(`./serbot/${directorio}`).filter(fileInDir => {
+      const fullDirPath = join(serbotDir, directorio);
+      if (statSync(fullDirPath).isDirectory()) {
+        let DSBPreKeys = readdirSync(fullDirPath).filter(fileInDir => {
           return fileInDir.startsWith('pre-key-');
         });
-        SBprekey = [...SBprekey, ...DSBPreKeys];
         DSBPreKeys.forEach(fileInDir => {
-          unlinkSync(`./serbot/${directorio}/${fileInDir}`);
+          try {
+            unlinkSync(join(fullDirPath, fileInDir));
+            SBprekeyCount++;
+            // console.log(chalk.green(`  - Eliminado: ${join(fullDirPath, fileInDir)}`));
+          } catch (e) {
+            console.error(chalk.red(`Error al eliminar ${join(fullDirPath, fileInDir)}: ${e}`));
+          }
         });
       }
     });
-    if (SBprekey.length === 0) {
-        console.log(chalk.cyanBright(`=> No hay archivos pre-key por eliminar en los sub-bots.`));
-        return;
+    if (SBprekeyCount > 0) {
+      console.log(chalk.cyanBright(`=> Eliminadas ${SBprekeyCount} pre-keys de sub-bots.`));
     }
-    console.log(chalk.cyanBright(`=> Archivos pre-key eliminados de ${SBprekey.length} sub-bots.`)); // Mensaje más útil
   } catch (err) {
-    console.log(chalk.bold.red(`Algo salió mal durante la eliminación de pre-keys de sub-bots, archivos no eliminados.`), err);
+    console.error(chalk.bold.red(`Algo salió mal durante la eliminación de pre-keys de sub-bots: `), err);
   }
 }
 
@@ -306,24 +365,20 @@ function purgeOldFiles() {
     if (!existsSync(dir)) return; // Asegura que el directorio existe antes de leer
     readdirSync(dir).forEach(file => {
       const filePath = path.join(dir, file);
-      stat(filePath, (err, stats) => {
-        if (err) {
-          console.error(chalk.red(`Error al obtener estadísticas del archivo ${filePath}:`), err);
-          return;
+      try { // Añadir try-catch para statSync también
+        const stats = statSync(filePath);
+        // Borrar solo archivos, no directorios, y que no sean 'creds.json' o 'bots.json'
+        if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json' && file !== 'bots.json') {
+          unlinkSync(filePath);
+          // console.log(chalk.bold.green(`Archivo ${file} borrado con éxito de ${dir}`));
         }
-        // Borrar solo archivos, no directorios, y que no sean 'creds.json'
-        if (stats.isFile() && stats.mtimeMs < oneHourAgo && file !== 'creds.json') {
-          try {
-            unlinkSync(filePath);
-            console.log(chalk.bold.green(`Archivo ${file} borrado con éxito de ${dir}`));
-          } catch (deleteErr) {
-            console.error(chalk.red(`Error al borrar el archivo ${filePath}:`), deleteErr);
-          }
-        }
-      });
+      } catch (err) {
+        console.error(chalk.red(`Error al procesar archivo ${filePath}:`), err);
+      }
     });
   });
 }
+
 
 // Manejador de actualización de conexión para el BOT PRINCIPAL
 async function connectionUpdate(update) {
@@ -340,6 +395,7 @@ async function connectionUpdate(update) {
 
     if (reason === DisconnectReason.badSession) {
       conn.logger.error(`[BOT PRINCIPAL] Sesión incorrecta, por favor elimina la carpeta ${global.authFile} y escanea nuevamente.`);
+      rmSync(`./${global.authFile}`, { recursive: true, force: true }); // Eliminar sesión rota
       process.exit(1); // Forzar la salida para que el usuario borre la sesión
     } else if (reason === DisconnectReason.connectionClosed) {
       conn.logger.warn(`[BOT PRINCIPAL] Conexión cerrada manualmente/remotamente, reconectando...`);
@@ -349,13 +405,16 @@ async function connectionUpdate(update) {
       await global.reloadHandler(true).catch(console.error);
     } else if (reason === DisconnectReason.connectionReplaced) {
       conn.logger.error(`[BOT PRINCIPAL] Conexión reemplazada (otra sesión abierta). Reiniciando...`);
-      if (fs.existsSync(`./${global.authFile}/creds.json`)) {
-        fs.unlinkSync(`./${global.authFile}/creds.json`); // Forzar eliminación de creds para un nuevo inicio
-      }
+      // No borrar creds.json aquí si quieres que PM2 intente reiniciar con la misma sesión
+      // Pero si se repite, es mejor borrarla.
+      // if (fs.existsSync(`./${global.authFile}/creds.json`)) {
+      //   fs.unlinkSync(`./${global.authFile}/creds.json`);
+      // }
       process.send('reset'); // Enviar señal de reinicio si se usa PM2
     } else if (reason === DisconnectReason.loggedOut) {
       conn.logger.error(`[BOT PRINCIPAL] Sesión cerrada (logged out). Por favor, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      process.exit(0); // Terminar el proceso if el bot se desloguea, requiere intervención manual
+      rmSync(`./${global.authFile}`, { recursive: true, force: true }); // Eliminar sesión rota
+      process.exit(0); // Terminar el proceso si el bot se desloguea, requiere intervención manual
     } else if (reason === DisconnectReason.restartRequired) {
       conn.logger.info(`[BOT PRINCIPAL] Reinicio necesario. Reiniciando manejador...`);
       await global.reloadHandler(true).catch(console.error);
@@ -375,6 +434,8 @@ async function connectionUpdate(update) {
   if (global.db.data == null) loadDatabase();
 
   // Manejo de QR si aplica
+  // Este bloque puede ser redundante si el QR ya se mostró al inicio,
+  // pero lo mantenemos por si hay una reconexión que requiera un nuevo QR.
   if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
     if (opcion == '1' || methodCodeQR) {
       console.log(chalk.yellow('Escanea el código QR del bot principal.'));
@@ -383,10 +444,14 @@ async function connectionUpdate(update) {
 }
 
 // Captura de excepciones no controladas
-process.on('uncaughtException', console.error);
+process.on('uncaughtException', (err) => {
+    console.error(chalk.red('[UNCAUGHT EXCEPTION]'), err);
+    // Considerar un reinicio controlado o salida si el error es fatal.
+    // process.exit(1);
+});
 
 let isInit = true;
-let handler = await import('./handler.js'); // Importar el manejador principal
+let handler = {}; // Inicializar como objeto vacío
 
 global.reloadHandler = async function (restatConn) {
   console.log(chalk.yellow('[RELOAD HANDLER] Recargando manejadores...'));
@@ -396,11 +461,16 @@ global.reloadHandler = async function (restatConn) {
       console.error(chalk.red(`[RELOAD HANDLER] Error al importar nuevo manejador: ${err}`));
       return null;
     });
-    if (Handler && Object.keys(Handler || {}).length) {
-      handler = Handler;
+    if (Handler && Object.keys(Handler || {}).length && Handler.default) { // Asegurarse de que Handler.default exista
+      handler = Handler.default; // Asignar el default export
       console.log(chalk.green('[RELOAD HANDLER] Manejador principal actualizado.'));
     } else {
-      console.warn(chalk.yellow('[RELOAD HANDLER] No se pudo actualizar el manejador. Usando la versión existente.'));
+      console.warn(chalk.yellow('[RELOAD HANDLER] No se pudo actualizar el manejador. Usando la versión existente (si la hay).'));
+      // Si no se pudo actualizar, y 'handler' está vacío, intentar cargar el original una vez
+      if (Object.keys(handler).length === 0) {
+        handler = (await import('./handler.js')).default;
+        console.log(chalk.green('[RELOAD HANDLER] Cargado manejador original.'));
+      }
     }
   } catch (e) {
     console.error(chalk.red(`[RELOAD HANDLER] Error general al recargar el manejador: ${e}`));
@@ -409,42 +479,47 @@ global.reloadHandler = async function (restatConn) {
   // Reiniciar la conexión principal si se solicita
   if (restatConn) {
     console.log(chalk.blue('[RELOAD HANDLER] Reiniciando conexión principal...'));
-    const oldChats = global.conn.chats;
+    const oldChats = global.conn?.chats; // Obtener chats existentes si la conexión ya existe
     try {
-      global.conn.ws.close(); // Cierra el WebSocket existente
+      global.conn?.ws?.close(); // Cierra el WebSocket existente de forma segura
     } catch (e) {
       console.error(chalk.red(`[RELOAD HANDLER] Error al cerrar el WebSocket principal: ${e}`));
     }
-    global.conn.ev.removeAllListeners(); // Elimina todos los listeners antiguos
+    global.conn?.ev?.removeAllListeners(); // Elimina todos los listeners antiguos de forma segura
     global.conn = makeWASocket(connectionOptions, { chats: oldChats }); // Crea una nueva instancia de conexión
     isInit = true;
     console.log(chalk.green('[RELOAD HANDLER] Nueva conexión principal creada.'));
   }
 
   // Desvincular manejadores antiguos si no es la primera inicialización
-  if (!isInit) {
-    global.conn.ev.off('messages.upsert', global.conn.handler);
-    global.conn.ev.off('connection.update', global.conn.connectionUpdate);
-    global.conn.ev.off('creds.update', global.conn.credsUpdate);
+  if (!isInit && global.conn) { // Asegurarse de que global.conn exista
+    if (global.conn.handler) global.conn.ev.off('messages.upsert', global.conn.handler);
+    if (global.conn.connectionUpdate) global.conn.ev.off('connection.update', global.conn.connectionUpdate);
+    if (global.conn.credsUpdate) global.conn.ev.off('creds.update', global.conn.credsUpdate);
     console.log(chalk.yellow('[RELOAD HANDLER] Manejadores antiguos del bot principal desvinculados.'));
   }
 
   // Vincular nuevos manejadores al bot principal
-  global.conn.handler = handler.handler.bind(global.conn);
-  global.conn.connectionUpdate = connectionUpdate.bind(global.conn);
-  global.conn.credsUpdate = saveCreds.bind(global.conn); // Usa saveCreds directamente
+  if (global.conn && handler && handler.handler) { // Asegurarse de que handler.handler exista
+    global.conn.handler = handler.handler.bind(global.conn);
+    global.conn.connectionUpdate = connectionUpdate.bind(global.conn);
+    global.conn.credsUpdate = saveCreds.bind(global.conn); // Usa saveCreds directamente
 
-  global.conn.ev.on('messages.upsert', global.conn.handler);
-  global.conn.ev.on('connection.update', global.conn.connectionUpdate);
-  global.conn.ev.on('creds.update', global.conn.credsUpdate);
-  isInit = false;
-  console.log(chalk.green('[RELOAD HANDLER] Manejadores del bot principal vinculados.'));
+    global.conn.ev.on('messages.upsert', global.conn.handler);
+    global.conn.ev.on('connection.update', global.conn.connectionUpdate);
+    global.conn.ev.on('creds.update', global.conn.credsUpdate);
+    isInit = false;
+    console.log(chalk.green('[RELOAD HANDLER] Manejadores del bot principal vinculados.'));
+  } else {
+    console.error(chalk.red('[RELOAD HANDLER] Error: No se pudo vincular manejadores al bot principal. Handler no válido.'));
+  }
+
 
   // Re-adjuntar manejadores para sub-bots también en caso de reloadHandler
   console.log(chalk.magenta('[RELOAD HANDLER] Re-adjuntando manejadores a los sub-bots existentes...'));
   for (const subBotId in global.conns) {
     const subConn = global.conns[subBotId];
-    if (subConn && subConn.ev) {
+    if (subConn && subConn.ev && handler && handler.handler) { // Asegurarse de que handler.handler exista
       // Remover oyentes antiguos para evitar duplicados
       if (subConn.handler) subConn.ev.off('messages.upsert', subConn.handler);
       // Adjuntar el manejador (usamos el mismo manejador principal para simplicidad)
@@ -452,7 +527,7 @@ global.reloadHandler = async function (restatConn) {
       subConn.ev.on('messages.upsert', subConn.handler);
       console.log(chalk.magenta(`[RELOAD HANDLER] Manejador re-adjuntado para el sub-bot: ${subBotId}`));
     } else {
-        console.warn(chalk.yellow(`[RELOAD HANDLER] Sub-bot ${subBotId} no tiene objeto 'conn' o 'ev' válido. Saltando.`));
+        console.warn(chalk.yellow(`[RELOAD HANDLER] Sub-bot ${subBotId} no tiene objeto 'conn' o 'ev' válido, o el manejador principal es inválido. Saltando.`));
     }
   }
   console.log(chalk.magenta('[RELOAD HANDLER] Finalizado re-adjuntar manejadores a sub-bots.'));
@@ -461,17 +536,28 @@ global.reloadHandler = async function (restatConn) {
 };
 
 // Carga de plugins
-const pluginFolder = global.__dirname(join(__dirname, './plugins/index'));
+const pluginFolder = global.__dirname(join(__dirname, './plugins')); // Ruta correcta a la carpeta de plugins
 const pluginFilter = (filename) => /\.js$/.test(filename);
 global.plugins = {};
 async function filesInit() {
   console.log(chalk.blue('[PLUGINS] Cargando plugins...'));
+  // Asegurarse de que el directorio de plugins existe
+  if (!existsSync(pluginFolder)) {
+    console.warn(chalk.yellow(`[PLUGINS] El directorio de plugins '${pluginFolder}' no existe. No se cargarán plugins.`));
+    return;
+  }
+
   for (const filename of readdirSync(pluginFolder).filter(pluginFilter)) {
     try {
       const file = global.__filename(join(pluginFolder, filename));
       const module = await import(file);
-      global.plugins[filename] = module.default || module;
-      console.log(chalk.green(`[PLUGINS] Cargado: ${filename}`));
+      // Asegurarse de que el módulo tiene una exportación por defecto o un objeto válido
+      if (module.default || Object.keys(module).length > 0) {
+        global.plugins[filename] = module.default || module;
+        console.log(chalk.green(`[PLUGINS] Cargado: ${filename}`));
+      } else {
+        console.warn(chalk.yellow(`[PLUGINS] El plugin '${filename}' no tiene una exportación válida (default o nombrada).`));
+      }
     } catch (e) {
       console.error(chalk.red(`[PLUGINS] Error al cargar el plugin '${filename}':`), e);
       delete global.plugins[filename];
@@ -500,9 +586,15 @@ global.reload = async (_ev, filename) => {
     else {
       try {
         const module = (await import(`${global.__filename(dir)}?update=${Date.now()}`)); // Forzar recarga
-        global.plugins[filename] = module.default || module;
+        if (module.default || Object.keys(module).length > 0) {
+          global.plugins[filename] = module.default || module;
+        } else {
+          console.warn(chalk.yellow(`[WATCH] El plugin '${filename}' actualizado no tiene una exportación válida.`));
+          delete global.plugins[filename];
+        }
       } catch (e) {
         console.error(chalk.red(`[WATCH] Error al requerir el plugin '${filename}':\n${format(e)}`));
+        delete global.plugins[filename]; // Eliminar el plugin si falla al requerir
       } finally {
         global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)));
       }
@@ -522,7 +614,7 @@ async function initSubBot(subBotId) {
 
   // Asegurarse de que el directorio del sub-bot existe
   if (!existsSync(subBotAuthFile)) {
-    console.error(chalk.red(`[SUB-BOT-INIT] Directorio de sesión no encontrado para ${subBotId}: ${subBotAuthFile}`));
+    console.error(chalk.red(`[SUB-BOT-INIT] Directorio de sesión no encontrado para ${subBotId}: ${subBotAuthFile}. Eliminando de bots.json.`));
     removeConnectedSubBot(subBotId); // Eliminar del bots.json si el directorio no existe
     return;
   }
@@ -534,8 +626,8 @@ async function initSubBot(subBotId) {
     if (global.conns[subBotId] && global.conns[subBotId].ws && global.conns[subBotId].ws.close) {
       console.log(chalk.yellow(`[SUB-BOT-INIT] Cerrando conexión existente para ${subBotId} antes de reiniciar...`));
       global.conns[subBotId].ev.removeAllListeners(); // Limpiar listeners antiguos
-      await global.conns[subBotId].ws.close();
-      delete global.conns[subBotId]; // Eliminar de global.conns temporalmente
+      await global.conns[subBotId].ws.close().catch(e => console.error(chalk.red(`Error al cerrar ws para ${subBotId}: ${e}`)));
+      // No eliminamos de global.conns aquí para mantener la referencia mientras se reinicia
     }
 
     const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
@@ -552,9 +644,15 @@ async function initSubBot(subBotId) {
       markOnlineOnConnect: true,
       generateHighQualityLinkPreview: true,
       getMessage: async (clave) => {
-        let jid = jidNormalizedUser(clave.remoteJid);
-        let msg = await store.loadMessage(jid, clave.id);
-        return msg?.message || "";
+        // Asegurarse de que 'store' y 'store.loadMessage' existen antes de usarlos
+        if (store && typeof store.loadMessage === 'function') {
+          let jid = jidNormalizedUser(clave.remoteJid);
+          let msg = await store.loadMessage(jid, clave.id);
+          return msg?.message || "";
+        } else {
+          console.error(chalk.red(`[SUB-BOT] Error para ${subBotId}: 'store' o 'store.loadMessage' no están definidos o no son una función.`));
+          return "";
+        }
       },
       msgRetryCounterCache,
       msgRetryCounterMap,
@@ -574,23 +672,25 @@ async function initSubBot(subBotId) {
       console.log(chalk.magenta(`  - Status: '${connection}'`));
       console.log(chalk.magenta(`  - lastDisconnect error: ${JSON.stringify(lastDisconnect?.error?.message || lastDisconnect?.error || 'N/A')}`));
       console.log(chalk.magenta(`  - isNewLogin: ${isNewLogin}`));
-      console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws.socket ? subConn.ws.socket.readyState : 'No socket object'}`));
+      console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws?.socket ? subConn.ws.socket.readyState : 'No socket object'}`));
       console.log(chalk.magenta(`  - conn.connection actual: '${subConn.connection}' (debería ser el mismo que 'status')`));
 
       if (isNewLogin) {
-        console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente. Estableciendo en global.conns.`));
-        // Adjuntar el manejador de mensajes solo si no existe
-        if (!subConn.handler) {
+        console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente.`));
+        // Adjuntar el manejador de mensajes si aún no está adjunto
+        if (!subConn.handler && handler && handler.handler) {
           subConn.handler = handler.handler.bind(subConn);
           subConn.ev.on('messages.upsert', subConn.handler);
           console.log(chalk.green(`${subBotName}: Manejador de mensajes adjuntado.`));
+        } else if (!handler || !handler.handler) {
+            console.warn(chalk.yellow(`${subBotName}: Manejador principal (handler.js) no válido. No se puede adjuntar manejador de mensajes.`));
         }
       }
 
       if (connection === 'open') {
         console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
         addConnectedSubBot(subBotId); // Añadir a bots.json
-        if (!subConn.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene (ej. tras una reconexión)
+        if (!subConn.handler && handler && handler.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene (ej. tras una reconexión)
           subConn.handler = handler.handler.bind(subConn);
           subConn.ev.on('messages.upsert', subConn.handler);
           console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión/reinicio.`));
@@ -605,7 +705,7 @@ async function initSubBot(subBotId) {
           delete subConn.handler;
         }
         subConn.ev.removeAllListeners(); // Eliminar todos los listeners
-        // NOTA: No eliminar de global.conns aquí si vas a intentar reiniciar,
+        // No eliminar de global.conns aquí si vas a intentar reiniciar,
         // ya que la referencia es necesaria para el setTimeout.
 
         if (reason === DisconnectReason.loggedOut) {
@@ -613,21 +713,11 @@ async function initSubBot(subBotId) {
           removeConnectedSubBot(subBotId); // Eliminar de bots.json
           delete global.conns[subBotId]; // Eliminar permanentemente de global.conns
           console.log(chalk.red(`${subBotName}: Eliminado permanentemente de global.conns debido a loggedOut.`));
-          // Opcional: rmSync(subBotAuthFile, { recursive: true, force: true }); para borrar la sesión rota.
-        } else if ([
-            DisconnectReason.badSession,
-            DisconnectReason.connectionReplaced,
-            DisconnectReason.timedOut // Considerar si timeout es persistente
-        ].includes(reason)) {
-            console.error(chalk.red(`${subBotName}: Desconexión fatal. Eliminando de bots.json y reintentando si aplica.`));
-            removeConnectedSubBot(subBotId); // Eliminar de bots.json
-            // Si la desconexión es fatal y no hay un mecanismo de reintento, podrías eliminar también de global.conns
-            // Pero si el initSubBot tiene un setTimeout para reintentar, déjalo.
-            setTimeout(() => initSubBot(subBotId), 5000); // Reintentar la inicialización
+          rmSync(subBotAuthFile, { recursive: true, force: true }); // Borrar la sesión rota.
         } else {
           // Para otras razones de desconexión, intentamos un reinicio con un pequeño retardo
           console.warn(chalk.yellow(`${subBotName}: Se desconectó (${reason}). Intentando reiniciar en 5 segundos...`));
-          setTimeout(() => initSubBot(subBotId), 5000);
+          setTimeout(() => initSubBot(subBotId), 5000); // Reintentar la inicialización
         }
       }
     });
@@ -662,9 +752,9 @@ async function startSubBots() {
 
   console.log(chalk.blue(`[SUB-BOTS] Iniciando proceso de carga para ${allSubBotIdsToProcess.length} sub-bots (dir y bots.json)...`));
 
+  // Iniciar cada sub-bot
   for (const subBotId of allSubBotIdsToProcess) {
-    // Usamos la nueva función initSubBot para iniciar cada uno
-    await initSubBot(subBotId);
+    await initSubBot(subBotId); // Usa await para asegurar que se procese uno por uno o usa Promise.all para concurrencia
   }
 }
 // --- Fin Gestión de Sub-bots ---
@@ -675,4 +765,6 @@ startSubBots().catch(console.error); // Ejecuta la función para iniciar los sub
 
 // --- Funciones de soporte y limpieza ---
 async function _quickTest() {
-  console.log(chalk.gray('xd')
+  // Esta función parece ser un marcador de posición, puedes eliminarla o implementarla.
+  console.log(chalk.gray('')); // Mantiene la línea 678
+}
