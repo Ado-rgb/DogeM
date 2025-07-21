@@ -675,4 +675,4 @@ startSubBots().catch(console.error); // Ejecuta la función para iniciar los sub
 
 // --- Funciones de soporte y limpieza ---
 async function _quickTest() {
-  console.log(chalk.gray('
+  console.log(chalk.gray('xd')
