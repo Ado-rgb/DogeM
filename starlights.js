@@ -1,4 +1,4 @@
-process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
+Process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1';
 import './config.js';
 import { createRequire } from 'module';
 import path, { join } from 'path';
@@ -86,6 +86,59 @@ global.loadDatabase = async function loadDatabase() {
 };
 loadDatabase();
 
+
+// --- Gestión del archivo bots.json para sub-bots conectados ---
+const botsJsonPath = './bots.json';
+let connectedSubBots = [];
+
+// Cargar los sub-bots conectados desde bots.json al inicio
+const loadConnectedSubBots = () => {
+    if (existsSync(botsJsonPath)) {
+        try {
+            connectedSubBots = JSON.parse(readFileSync(botsJsonPath, 'utf8'));
+            console.log(chalk.blue(`[BOTS.JSON] ${connectedSubBots.length} sub-bots conectados cargados desde ${botsJsonPath}.`));
+        } catch (e) {
+            console.error(chalk.red(`[BOTS.JSON] Error al leer bots.json: ${e}. Se inicializa vacío.`));
+            connectedSubBots = [];
+        }
+    } else {
+        console.log(chalk.blue(`[BOTS.JSON] bots.json no encontrado, se creará uno nuevo.`));
+        connectedSubBots = [];
+    }
+};
+
+// Guardar los sub-bots conectados en bots.json
+const saveConnectedSubBots = () => {
+    try {
+        writeFileSync(botsJsonPath, JSON.stringify(connectedSubBots, null, 2), 'utf8');
+        console.log(chalk.green(`[BOTS.JSON] Lista de sub-bots conectados guardada en ${botsJsonPath}.`));
+    } catch (e) {
+        console.error(chalk.red(`[BOTS.JSON] Error al guardar bots.json: ${e}`));
+    }
+};
+
+// Añadir un sub-bot a la lista de conectados
+const addConnectedSubBot = (subBotId) => {
+    if (!connectedSubBots.includes(subBotId)) {
+        connectedSubBots.push(subBotId);
+        saveConnectedSubBots();
+        console.log(chalk.green(`[BOTS.JSON] Sub-bot '${subBotId}' añadido a la lista de conectados.`));
+    }
+};
+
+// Eliminar un sub-bot de la lista de conectados
+const removeConnectedSubBot = (subBotId) => {
+    const initialLength = connectedSubBots.length;
+    connectedSubBots = connectedSubBots.filter(id => id !== subBotId);
+    if (connectedSubBots.length < initialLength) {
+        saveConnectedSubBots();
+        console.log(chalk.red(`[BOTS.JSON] Sub-bot '${subBotId}' eliminado de la lista de conectados.`));
+    }
+};
+
+loadConnectedSubBots(); // Cargar al inicio
+
+
 // Configuración de autenticación de Baileys
 global.authFile = `sessions`;
 const { state, saveState, saveCreds } = await useMultiFileAuthState(global.authFile);
@@ -118,7 +171,7 @@ if (!methodCodeQR && !methodCode && !fs.existsSync(`./${authFile}/creds.json`)) 
 
 // Silenciar logs de consola de pino (para evitar spam del bot principal en producción, sub-bots usarán 'info')
 // Si quieres ver los logs del bot principal, cambia 'silent' a 'info' o 'debug'
-console.info = () => { }; // Comentar o eliminar esta línea para ver los logs del bot principal
+// console.info = () => { }; // Comentar o eliminar esta línea para ver los logs del bot principal
 
 // Opciones de conexión para el bot principal
 const connectionOptions = {
@@ -302,7 +355,7 @@ async function connectionUpdate(update) {
       process.send('reset'); // Enviar señal de reinicio si se usa PM2
     } else if (reason === DisconnectReason.loggedOut) {
       conn.logger.error(`[BOT PRINCIPAL] Sesión cerrada (logged out). Por favor, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      process.exit(0); // Terminar el proceso si el bot se desloguea, requiere intervención manual
+      process.exit(0); // Terminar el proceso if el bot se desloguea, requiere intervención manual
     } else if (reason === DisconnectReason.restartRequired) {
       conn.logger.info(`[BOT PRINCIPAL] Reinicio necesario. Reiniciando manejador...`);
       await global.reloadHandler(true).catch(console.error);
@@ -470,6 +523,7 @@ async function initSubBot(subBotId) {
   // Asegurarse de que el directorio del sub-bot existe
   if (!existsSync(subBotAuthFile)) {
     console.error(chalk.red(`[SUB-BOT-INIT] Directorio de sesión no encontrado para ${subBotId}: ${subBotAuthFile}`));
+    removeConnectedSubBot(subBotId); // Eliminar del bots.json si el directorio no existe
     return;
   }
 
@@ -535,7 +589,7 @@ async function initSubBot(subBotId) {
 
       if (connection === 'open') {
         console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
-        // Aquí no necesitas reasignar global.conns[subBotId] = subConn; porque ya se hizo al crear la conexión.
+        addConnectedSubBot(subBotId); // Añadir a bots.json
         if (!subConn.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene (ej. tras una reconexión)
           subConn.handler = handler.handler.bind(subConn);
           subConn.ev.on('messages.upsert', subConn.handler);
@@ -553,14 +607,23 @@ async function initSubBot(subBotId) {
         subConn.ev.removeAllListeners(); // Eliminar todos los listeners
         // NOTA: No eliminar de global.conns aquí si vas a intentar reiniciar,
         // ya que la referencia es necesaria para el setTimeout.
-        // Se eliminará si la reconexión falla por 'loggedOut' o si se cierra permanentemente.
 
         if (reason === DisconnectReason.loggedOut) {
           console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
-          // Aquí SÍ debes eliminar de global.conns porque la sesión está muerta
-          delete global.conns[subBotId];
+          removeConnectedSubBot(subBotId); // Eliminar de bots.json
+          delete global.conns[subBotId]; // Eliminar permanentemente de global.conns
           console.log(chalk.red(`${subBotName}: Eliminado permanentemente de global.conns debido a loggedOut.`));
           // Opcional: rmSync(subBotAuthFile, { recursive: true, force: true }); para borrar la sesión rota.
+        } else if ([
+            DisconnectReason.badSession,
+            DisconnectReason.connectionReplaced,
+            DisconnectReason.timedOut // Considerar si timeout es persistente
+        ].includes(reason)) {
+            console.error(chalk.red(`${subBotName}: Desconexión fatal. Eliminando de bots.json y reintentando si aplica.`));
+            removeConnectedSubBot(subBotId); // Eliminar de bots.json
+            // Si la desconexión es fatal y no hay un mecanismo de reintento, podrías eliminar también de global.conns
+            // Pero si el initSubBot tiene un setTimeout para reintentar, déjalo.
+            setTimeout(() => initSubBot(subBotId), 5000); // Reintentar la inicialización
         } else {
           // Para otras razones de desconexión, intentamos un reinicio con un pequeño retardo
           console.warn(chalk.yellow(`${subBotName}: Se desconectó (${reason}). Intentando reiniciar en 5 segundos...`));
@@ -588,16 +651,18 @@ async function startSubBots() {
     return;
   }
 
-  const subBotIds = readdirSync(serbotDir).filter(f => statSync(join(serbotDir, f)).isDirectory());
+  // Obtener IDs de sub-bots tanto de los directorios como de bots.json
+  const subBotIdsFromDirs = readdirSync(serbotDir).filter(f => statSync(join(serbotDir, f)).isDirectory());
+  const allSubBotIdsToProcess = [...new Set([...subBotIdsFromDirs, ...connectedSubBots])]; // Combina y elimina duplicados
 
-  if (subBotIds.length === 0) {
-      console.log(chalk.blue(`[SUB-BOTS] No se encontraron directorios de sub-bots en '${serbotDir}'.`));
+  if (allSubBotIdsToProcess.length === 0) {
+      console.log(chalk.blue(`[SUB-BOTS] No se encontraron directorios de sub-bots en '${serbotDir}' ni en bots.json.`));
       return;
   }
 
-  console.log(chalk.blue(`[SUB-BOTS] Iniciando proceso de carga para ${subBotIds.length} sub-bots...`));
+  console.log(chalk.blue(`[SUB-BOTS] Iniciando proceso de carga para ${allSubBotIdsToProcess.length} sub-bots (dir y bots.json)...`));
 
-  for (const subBotId of subBotIds) {
+  for (const subBotId of allSubBotIdsToProcess) {
     // Usamos la nueva función initSubBot para iniciar cada uno
     await initSubBot(subBotId);
   }
@@ -610,59 +675,4 @@ startSubBots().catch(console.error); // Ejecuta la función para iniciar los sub
 
 // --- Funciones de soporte y limpieza ---
 async function _quickTest() {
-  console.log(chalk.gray('[TOOLS] Ejecutando pruebas de herramientas (ffmpeg, convert, etc.)...'));
-  const test = await Promise.all([
-    spawn('ffmpeg'),
-    spawn('ffprobe'),
-    spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-filter_complex', 'color', '-frames:v', '1', '-f', 'webp', '-']),
-    spawn('convert'),
-    spawn('magick'),
-    spawn('gm'),
-    spawn('find', ['--version']),
-  ].map((p) => {
-    return Promise.race([
-      new Promise((resolve) => {
-        p.on('close', (code) => {
-          resolve(code !== 127);
-        });
-      }),
-      new Promise((resolve) => {
-        p.on('error', (_) => resolve(false));
-      })]);
-  }));
-  const [ffmpeg, ffprobe, ffmpegWebp, convert, magick, gm, find] = test;
-  global.support = { ffmpeg, ffprobe, ffmpegWebp, convert, magick, gm, find };
-  Object.freeze(global.support);
-  console.log(chalk.gray('[TOOLS] Pruebas de herramientas completadas.'));
-}
-// Intervalos de ejecución de limpieza y pruebas
-setInterval(async () => {
-  if (global.stopped === 'close' || !global.conn || !global.conn.user) return; // Usar global.conn
-  const a = await clearTmp();
-  // console.log(chalk.gray(`[CLEANUP] Tmp cleaned: ${a.filter(Boolean).length} files.`)); // Mensaje más detallado
-}, 180000); // Cada 3 minutos
-
-setInterval(async () => {
-  if (global.stopped === 'close' || !global.conn || !global.conn.user) return;
-  await purgeSession();
-  await purgeSessionSB();
-  await purgeOldFiles();
-}, 1000 * 60 * 60); // Cada hora
-
-_quickTest().catch(console.error); // Ejecuta las pruebas al inicio
-
-async function isValidPhoneNumber(number) {
-  try {
-    number = number.replace(/\s+/g, '');
-    // Si el número empieza con '+521' o '+52 1', quitar el '1'
-    if (number.startsWith('+521')) {
-      number = number.replace('+521', '+52'); // Cambiar +521 a +52
-    } else if (number.startsWith('+52') && number[4] === '1') {
-      number = number.replace('+52 1', '+52'); // Cambiar +52 1 a +52
-    }
-    const parsedNumber = phoneUtil.parseAndKeepRawInput(number);
-    return phoneUtil.isValidNumber(parsedNumber);
-  } catch (error) {
-    return false;
-  }
-}
+  console.log(chalk.gray('
