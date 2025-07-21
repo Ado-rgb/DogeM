@@ -2,39 +2,47 @@ import ws from 'ws'
 
 async function handler(m, { conn: stars, usedPrefix }) {
   let connectedSubBots = []
+  let mentionedJids = []; // Array para almacenar los JIDs para las menciones
 
-  // Iterar solo sobre los sub-bots en global.conns
-  // Object.values() nos da un array con todos los objetos de conexión de los sub-bots
+  // Iterar sobre los sub-bots en global.conns
   Object.values(global.conns).forEach((conn) => {
     // Validar que la conexión exista, que el usuario esté definido
     // y que el socket de WebSocket no esté en estado 'CLOSED' (cerrado)
-    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState !== ws.CLOSED) {
-      connectedSubBots.push(conn); // Añadir directamente el objeto de conexión
+    // y que el estado de conexión sea 'open'
+    if (conn && conn.user && conn.ws.socket && conn.ws.socket.readyState === ws.OPEN && conn.connection === 'open') {
+      connectedSubBots.push(conn); // Añadir el objeto de conexión
+      // Asegurarse de que el JID esté en formato completo (número@s.whatsapp.net) para las menciones
+      mentionedJids.push(conn.user.jid); 
     }
   });
 
   // Si no hay sub-bots conectados, enviar un mensaje específico
   if (connectedSubBots.length === 0) {
-    let responseMessage = `*No hay sub-bots conectados en este momento.*`;
+    let responseMessage = `*🤖 No hay sub-bots conectados en este momento.*`;
     await stars.sendMessage(m.chat, { text: responseMessage }, { quoted: m });
     return; // Salir de la función
   }
 
   // Generar el mensaje con la información de los sub-bots
   let message = connectedSubBots.map((v, index) => {
-    const jid = v.user.jid.replace(/[^0-9]/g, ''); // Limpiar el JID para el número
-    const name = v.user.name || v.user.verifiedName || '-'; // Obtener el nombre del usuario
+    // Limpiar el JID para obtener solo el número
+    const jidNumber = v.user.jid.replace(/[^0-9]/g, ''); 
+    const name = v.user.name || v.user.verifiedName || 'Sin Nombre'; // Obtener el nombre o un valor predeterminado
 
-    return `*${index + 1}.- Sub-Bot*\n*Número:* @${jid}\n*Link:* https://wa.me/${jid}\n*Nombre:* ${name}`;
+    return `*${index + 1}.- Sub-Bot*\n*Número:* @${jidNumber}\n*Enlace:* https://wa.me/${jidNumber}\n*Nombre:* ${name}`;
   }).join('\n\n');
 
   let totalSubBots = connectedSubBots.length;
-  let responseMessage = `*Total de Sub-Bots Conectados* : ${totalSubBots}\n\n${message.trim()}`.trim();
+  let responseMessage = `*📊 Total de Sub-Bots Conectados:* ${totalSubBots}\n\n${message.trim()}`.trim();
 
-  await stars.sendMessage(m.chat, { text: responseMessage, mentions: stars.parseMention(responseMessage) }, { quoted: m });
+  // Enviar el mensaje, incluyendo las menciones
+  await stars.sendMessage(m.chat, { 
+    text: responseMessage, 
+    mentions: mentionedJids 
+  }, { quoted: m });
 }
 
-handler.command = ['listjadibot', 'bots'];
-handler.help = ['bots'];
+handler.command = ['listjadibot', 'bots', 'subbots']; // Añadí 'subbots' como alias
+handler.help = ['bots', 'subbots'];
 handler.tags = ['serbot'];
 export default handler;
