@@ -34,9 +34,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       text: msg,
       contextInfo: {
         externalAdReply: {
-          title: `Clima en ${loc.name}`,
-          body: `Condición: ${cur.condition.text}`,
-          thumbnailUrl: "https://n.uguu.se/fWGkvhGH.jpg",
+          title: `❇️ Clima en ${loc.name}`,
+          body: `🔰 Condición: ${cur.condition.text}`,
+          thumbnailUrl: "https://files.catbox.moe/stnpza.jpg",
           mediaType: 1,
           renderLargerThumbnail: true,
           sourceUrl: `https://www.google.com/search?q=clima+${encodeURIComponent(loc.name)}`
