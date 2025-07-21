@@ -11,6 +11,7 @@ let tags = {
   'rpg': '🌌 RPG',
   'rg': '🗂 Registro',
   'sticker': '🏞 Stickers',
+  'ia': '🔰 IA',
   'img': '📸 Imágenes',
   'group': '👥 Grupos',
   'logo': '🎨 Logos',
