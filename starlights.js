@@ -428,6 +428,7 @@ async function startSubBots() {
   for (const subBotId of subBotIds) {
     const subBotAuthFile = join(serbotDir, subBotId);
     try {
+      // Usamos useMultiFileAuthState para cada sub-bot para sus credenciales independientes
       const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
 
       const subConnOptions = {
@@ -459,9 +460,10 @@ async function startSubBots() {
         const { connection, lastDisconnect, isNewLogin } = update;
         const subBotName = `Sub-Bot [${subBotId}]`;
 
+        // LÓGICA CLAVE PARA AÑADIR/QUITAR SUB-BOT DE GLOBAL.CONNS
         if (isNewLogin) {
-          console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente.`));
-          global.conns[subBotId] = subConn; // Añadir a global.conns al iniciar sesión
+          console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente. Estableciendo en global.conns.`));
+          global.conns[subBotId] = subConn; // <<-- AÑADE LA CONEXIÓN DEL SUB-BOT A GLOBAL.CONNS
           // Una vez conectado, adjuntamos el manejador
           subConn.handler = handler.handler.bind(subConn); // Usamos el mismo manejador principal
           subConn.ev.on('messages.upsert', subConn.handler);
@@ -471,9 +473,8 @@ async function startSubBots() {
         const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
         if (code && code !== DisconnectReason.loggedOut && subConn?.ws.socket == null) {
           console.warn(chalk.yellow(`${subBotName}: Conexión cerrada con código ${code}, intentando reconectar...`));
-          // Aquí podríamos añadir lógica de reconexión específica para sub-bots si fuera diferente del principal
-          // Por ahora, se confiará en que Baileys maneje la reconexión interna.
-          // Si el manejador de eventos se desvincula por un error de conexión, debemos re-adjuntarlo.
+          // Podrías añadir un mecanismo de reintento o reinicio aquí para sub-bots si es necesario
+          // Asegurarse de re-adjuntar manejador si se desvincula por un error de conexión
           if (subConn.handler) {
             subConn.ev.off('messages.upsert', subConn.handler); // Asegurarse de no duplicar
             subConn.ev.on('messages.upsert', subConn.handler);
@@ -481,8 +482,8 @@ async function startSubBots() {
         }
 
         if (connection === 'open') {
-          console.log(chalk.green(`${subBotName}: Conectado.`));
-          global.conns[subBotId] = subConn; // Asegurarse de que esté añadido al abrirse la conexión
+          console.log(chalk.green(`${subBotName}: Conectado y listo para operar.`));
+          global.conns[subBotId] = subConn; // <<-- RE-ASEGURA QUE ESTÉ EN GLOBAL.CONNS SI SE RECONECTA
           // Si ya no es newLogin pero la conexión se abre, re-adjuntar el manejador
           if (!subConn.handler) {
             subConn.handler = handler.handler.bind(subConn);
@@ -492,14 +493,14 @@ async function startSubBots() {
         } else if (connection === 'close') {
           const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
           console.error(chalk.red(`${subBotName}: Conexión cerrada. Razón: ${reason || 'Desconocida'}`));
-          delete global.conns[subBotId]; // Eliminar de global.conns si la conexión se cierra
+          delete global.conns[subBotId]; // <<-- ELIMINA DE GLOBAL.CONNS SI LA CONEXIÓN SE CIERRA
           // Remover el manejador de eventos al cerrar la conexión
           if (subConn.handler) {
             subConn.ev.off('messages.upsert', subConn.handler);
             delete subConn.handler; // Limpiar la referencia
           }
           if (reason === DisconnectReason.loggedOut) {
-            console.error(chalk.red(`${subBotName}: Sesión cerrada. Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
+            console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
             // Opcional: Eliminar creds.json para este bot específico aquí
             // if (existsSync(join(subBotAuthFile, 'creds.json'))) unlinkSync(join(subBotAuthFile, 'creds.json'));
           }
@@ -563,18 +564,4 @@ setInterval(async () => {
 }, 1000 * 60 * 60); // Cada hora
 _quickTest().catch(console.error);
 
-async function isValidPhoneNumber(number) {
-  try {
-    number = number.replace(/\s+/g, '');
-    // Si el número empieza con '+521' o '+52 1', quitar el '1'
-    if (number.startsWith('+521')) {
-      number = number.replace('+521', '+52'); // Cambiar +521 a +52
-    } else if (number.startsWith('+52') && number[4] === '1') {
-      number = number.replace('+52 1', '+52'); // Cambiar +52 1 a +52
-    }
-    const parsedNumber = phoneUtil.parseAndKeepRawInput(number);
-    return phoneUtil.isValidNumber(parsedNumber);
-  } catch (error) {
-    return false;
-  }
-}
+async function isValidPhoneNumber
