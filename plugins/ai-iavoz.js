@@ -76,7 +76,8 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
   }
 };
 
-
+handler.help = ['iavoz']
+handler.tags = ['ia']
 handler.command = ['iavoz'];
 handler.register = true;
 
