@@ -1,65 +1,69 @@
-import ws from 'ws'
-import chalk from 'chalk'
+import ws from 'ws' // Import WebSocket module to check ws.OPEN state
+import chalk from 'chalk' // For colored console output, useful for debugging
 
 async function handler(m, { conn: stars, usedPrefix }) {
   let connectedSubBots = []
-  let mentionedJids = []; // Array para almacenar los JIDs para las menciones
+  let mentionedJids = []; // Array to store JIDs for mentions in the final message
 
-  console.log(chalk.blue('--- Iniciando verificación de sub-bots para el comando .bots ---'));
-  console.log(chalk.blue(`Número de entradas iniciales en global.conns: ${Object.keys(global.conns).length}`));
+  console.log(chalk.blue('--- [COMMAND: .bots] Starting sub-bot check ---'));
+  console.log(chalk.blue(`[COMMAND: .bots] Initial count of global.conns entries: ${Object.keys(global.conns).length}`));
 
-  // Añadir una pequeña demora para permitir que los estados de conexión se asienten
-  // Esto es un intento de solucionar posibles problemas de "race condition"
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Espera 1 segundo
+  // Add a small delay to allow connection states to settle.
+  // This helps mitigate race conditions where a bot might be marked as connected
+  // in index.js but its state isn't fully propagated or stable when .bots is called.
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for 1 second
 
-  console.log(chalk.blue(`Número de entradas en global.conns después de 1 segundo: ${Object.keys(global.conns).length}`));
+  console.log(chalk.blue(`[COMMAND: .bots] Count of global.conns entries after 1 second delay: ${Object.keys(global.conns).length}`));
 
-  // Iterar sobre los sub-bots en global.conns
-  // Usamos Object.entries para obtener tanto el ID como el objeto de conexión
+  // Iterate over the sub-bots stored in global.conns
+  // Using Object.entries to get both the subBotId (key) and the conn object (value)
   for (const [subBotId, conn] of Object.entries(global.conns)) {
     
-    // Validar que la conexión exista y que el usuario esté definido
+    // Validate that the connection object and its 'user' property exist.
+    // A 'conn' object without 'conn.user' is usually an incomplete or failed connection.
     if (!conn || !conn.user) {
-      console.log(chalk.yellow(`[DEBUG] Sub-bot ${subBotId}: Objeto de conexión o usuario no encontrado en global.conns. Saltando.`));
-      continue; // Saltar a la siguiente iteración
+      console.log(chalk.yellow(`[COMMAND: .bots][DEBUG] Sub-bot ${subBotId}: Connection object or user info not found in global.conns. Skipping.`));
+      continue; // Skip to the next iteration if invalid
     }
 
-    // Validar el estado del WebSocket
-    // ws.OPEN (1) significa que el socket está conectado y listo
+    // --- CRITICAL CONNECTION STATE CHECKS ---
+    // 1. Check WebSocket readyState: ws.OPEN (which is typically 1) means the socket is open and ready.
     const isWsSocketOpen = conn.ws.socket && conn.ws.socket.readyState === ws.OPEN;
     
-    // Validar el estado de conexión de Baileys
-    // conn.connection === 'open' es el estado más fiable de Baileys
+    // 2. Check Baileys 'connection' status: 'open' is the most reliable state from Baileys.
     const isBaileysStatusOpen = conn.connection === 'open';
 
-    console.log(chalk.cyan(`[DEBUG] Procesando Sub-bot: ${subBotId} (JID: ${conn.user.jid})`));
-    console.log(chalk.cyan(`  - Estado Baileys (conn.connection): '${conn.connection}' (Esperado: 'open')`));
-    console.log(chalk.cyan(`  - Estado WebSocket (conn.ws.socket.readyState): ${conn.ws.socket ? conn.ws.socket.readyState : 'No hay socket'} (Esperado: ${ws.OPEN} - OPEN)`));
-    console.log(chalk.cyan(`  - ¿WebSocket Abierto (isWsSocketOpen)? ${isWsSocketOpen}`));
-    console.log(chalk.cyan(`  - ¿Baileys Abierto (isBaileysStatusOpen)? ${isBaileysStatusOpen}`));
+    // Detailed debug logging for each sub-bot being processed
+    console.log(chalk.cyan(`[COMMAND: .bots][DEBUG] Processing Sub-bot: ${subBotId} (JID: ${conn.user.jid})`));
+    console.log(chalk.cyan(`  - Baileys Connection Status (conn.connection): '${conn.connection}' (Expected: 'open')`));
+    console.log(chalk.cyan(`  - WebSocket readyState (conn.ws.socket.readyState): ${conn.ws.socket ? conn.ws.socket.readyState : 'No socket'} (Expected: ${ws.OPEN} - OPEN)`));
+    console.log(chalk.cyan(`  - Is WebSocket Open (isWsSocketOpen)? ${isWsSocketOpen}`));
+    console.log(chalk.cyan(`  - Is Baileys Status Open (isBaileysStatusOpen)? ${isBaileysStatusOpen}`));
 
+    // If both WebSocket and Baileys connection statuses are 'open', consider it connected
     if (isWsSocketOpen && isBaileysStatusOpen) {
-      connectedSubBots.push(conn); // Añadir el objeto de conexión
-      mentionedJids.push(conn.user.jid); // Añadir el JID completo para las menciones
-      console.log(chalk.green(`  -> Sub-bot ${subBotId} DETECTADO COMO CONECTADO Y FUNCIONAL.`));
+      connectedSubBots.push(conn); // Add the full connection object to our list
+      mentionedJids.push(conn.user.jid); // Add the full JID for mentions
+      console.log(chalk.green(`  -> Sub-bot ${subBotId} DETECTED AS CONNECTED AND OPERATIONAL.`));
     } else {
-      console.log(chalk.red(`  -> Sub-bot ${subBotId} NO ESTÁ CONECTADO (uno o ambos estados no son 'open').`));
+      console.log(chalk.red(`  -> Sub-bot ${subBotId} IS NOT CONNECTED (one or both states are not 'open').`));
     }
   }
 
-  // Si no hay sub-bots conectados, enviar un mensaje específico
+  // If no sub-bots are connected after checking all entries
   if (connectedSubBots.length === 0) {
     let responseMessage = `*🤖 No hay sub-bots conectados en este momento.*`;
     await stars.sendMessage(m.chat, { text: responseMessage }, { quoted: m });
-    console.log(chalk.red('--- No se encontraron sub-bots conectados. ---'));
-    return; // Salir de la función
+    console.log(chalk.red('--- [COMMAND: .bots] No connected sub-bots found. ---'));
+    return; // Exit the function
   }
 
-  // Generar el mensaje con la información de los sub-bots
+  // Generate the message with connected sub-bot information
   let message = connectedSubBots.map((v, index) => {
-    // Limpiar el JID para obtener solo el número
+    // Clean the JID to get only the number for display
     const jidNumber = v.user.jid.replace(/[^0-9]/g, ''); 
-    const name = v.user.name || v.user.verifiedName || 'Sin Nombre'; // Obtener el nombre o un valor predeterminado
+    // Get the bot's name, preferring verifiedName, then name, then a default
+    const name = v.user.verifiedName || v.user.name || 'Sin Nombre'; 
 
     return `*${index + 1}.- Sub-Bot*\n*Número:* @${jidNumber}\n*Enlace:* https://wa.me/${jidNumber}\n*Nombre:* ${name}`;
   }).join('\n\n');
@@ -67,16 +71,18 @@ async function handler(m, { conn: stars, usedPrefix }) {
   let totalSubBots = connectedSubBots.length;
   let responseMessage = `*📊 Total de Sub-Bots Conectados:* ${totalSubBots}\n\n${message.trim()}`.trim();
 
-  // Enviar el mensaje, incluyendo las menciones
+  // Send the message, including mentions for the JIDs
   await stars.sendMessage(m.chat, { 
     text: responseMessage, 
     mentions: mentionedJids 
   }, { quoted: m });
 
-  console.log(chalk.green(`--- Comando .bots ejecutado con éxito. Se listaron ${totalSubBots} sub-bots. ---`));
+  console.log(chalk.green(`--- [COMMAND: .bots] Command executed successfully. Listed ${totalSubBots} sub-bots. ---`));
 }
 
+// Command aliases and help info
 handler.command = ['listjadibot', 'bots', 'subbots']; 
 handler.help = ['bots', 'subbots'];
-handler.tags = ['serbot'];
+handler.tags = ['serbot']; // Tag for grouping in help commands
+
 export default handler;
