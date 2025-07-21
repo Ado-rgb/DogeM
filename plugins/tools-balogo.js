@@ -9,6 +9,6 @@ let handler = async (m, { conn, usedPrefix, command, args }) => {
 
 handler.help = ['balogo'];
 handler.command = ['balogo'];
-handler.tags = ['logos']
+handler.tags = ['logo']
 
 export default handler;
