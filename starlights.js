@@ -13,9 +13,8 @@ import chalk from 'chalk'; // Asegúrate de que 'chalk' esté instalado (npm ins
 import syntaxerror from 'syntax-error';
 import { tmpdir } from 'os';
 import { format } from 'util';
-import P from 'pino'; // Ya importado, solo para claridad
-import pino from 'pino'; // Ya importado, solo para claridad
-import Pino from 'pino'; // Ya importado, solo para claridad
+// Ya están importados pino de diversas formas, mantendremos la más común
+import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import { makeWASocket, protoType, serialize } from './lib/simple.js';
 import { Low, JSONFile } from 'lowdb';
@@ -90,7 +89,8 @@ loadDatabase();
 // Configuración de autenticación de Baileys
 global.authFile = `sessions`;
 const { state, saveState, saveCreds } = await useMultiFileAuthState(global.authFile);
-const msgRetryCounterMap = (MessageRetryMap) => { }; // Esto podría ser un problema si MessageRetryMap no está definido o es un objeto
+// Aquí 'MessageRetryMap' debería ser un objeto o null, no una función
+const msgRetryCounterMap = {}; 
 const msgRetryCounterCache = new NodeCache();
 const { version } = await fetchLatestBaileysVersion();
 let phoneNumber = global.botnumber; // Asegúrate de que global.botnumber esté definido en config.js o similar
@@ -108,7 +108,6 @@ if (methodCodeQR) {
 }
 if (!methodCodeQR && !methodCode && !fs.existsSync(`./${authFile}/creds.json`)) {
   do {
-    // let lineM = '⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ ⋯ 》'; // Esta variable no se usa
     opcion = await question('Seleccione una opción:\n1. Con código QR\n2. Con código de texto de 8 dígitos\n---> ');
 
     if (!/^[1-2]$/.test(opcion)) {
@@ -117,12 +116,13 @@ if (!methodCodeQR && !methodCode && !fs.existsSync(`./${authFile}/creds.json`)) 
   } while (opcion !== '1' && opcion !== '2' || fs.existsSync(`./${authFile}/creds.json`));
 }
 
-// Silenciar logs de consola de pino (para evitar spam)
-console.info = () => { };
+// Silenciar logs de consola de pino (para evitar spam del bot principal en producción, sub-bots usarán 'info')
+// Si quieres ver los logs del bot principal, cambia 'silent' a 'info' o 'debug'
+console.info = () => { }; // Comentar o eliminar esta línea para ver los logs del bot principal
 
 // Opciones de conexión para el bot principal
 const connectionOptions = {
-  logger: pino({ level: 'silent' }), // Nivel de log silencioso para producción
+  logger: pino({ level: 'silent' }), // Nivel de log silencioso para el bot principal
   printQRInTerminal: opcion == '1' || methodCodeQR, // Imprimir QR solo si se elige opción 1 o methodCodeQR
   mobile: MethodMobile,
   browser: opcion == '1' || methodCodeQR ? ['Sumi Sakurasawa', 'Safari', '2.0.0'] : ['Ubuntu', 'Chrome', '110.0.5585.95'],
@@ -138,7 +138,7 @@ const connectionOptions = {
     return msg?.message || "";
   },
   msgRetryCounterCache,
-  msgRetryCounterMap, // Asegúrate de que MessageRetryMap sea un objeto válido
+  msgRetryCounterMap,
   defaultQueryTimeoutMs: undefined,
   version: [2, 3000, 1023223821], // Versión de Baileys, considera actualizar si hay problemas
 };
@@ -163,7 +163,6 @@ if (!fs.existsSync(`./${authFile}/creds.json`)) {
         } while (!await isValidPhoneNumber(phoneNumber));
         rl.close();
         addNumber = phoneNumber.replace(/\D/g, '');
-        // const PHONENUMBER_MCC = { ... }; // Este objeto no se usa aquí
 
         setTimeout(async () => {
           let codigo = await conn.requestPairingCode(addNumber);
@@ -177,7 +176,7 @@ if (!fs.existsSync(`./${authFile}/creds.json`)) {
 }
 
 conn.isInit = false;
-conn.well = false; // Esta variable no parece ser utilizada en el resto del código
+// conn.well = false; // Esta variable no se utiliza y puede eliminarse si no tienes un uso específico para ella
 
 // Intervalos de mantenimiento (escritura de DB, limpieza de temporales, etc.)
 if (!opts['test']) {
@@ -288,7 +287,7 @@ async function connectionUpdate(update) {
 
     if (reason === DisconnectReason.badSession) {
       conn.logger.error(`[BOT PRINCIPAL] Sesión incorrecta, por favor elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      // Considera un `process.exit(1)` aquí para forzar el reinicio si no se soluciona solo
+      process.exit(1); // Forzar la salida para que el usuario borre la sesión
     } else if (reason === DisconnectReason.connectionClosed) {
       conn.logger.warn(`[BOT PRINCIPAL] Conexión cerrada manualmente/remotamente, reconectando...`);
       await global.reloadHandler(true).catch(console.error);
@@ -297,15 +296,13 @@ async function connectionUpdate(update) {
       await global.reloadHandler(true).catch(console.error);
     } else if (reason === DisconnectReason.connectionReplaced) {
       conn.logger.error(`[BOT PRINCIPAL] Conexión reemplazada (otra sesión abierta). Reiniciando...`);
-      // Forzar eliminación de creds para un nuevo inicio
       if (fs.existsSync(`./${global.authFile}/creds.json`)) {
-        fs.unlinkSync(`./${global.authFile}/creds.json`);
+        fs.unlinkSync(`./${global.authFile}/creds.json`); // Forzar eliminación de creds para un nuevo inicio
       }
       process.send('reset'); // Enviar señal de reinicio si se usa PM2
     } else if (reason === DisconnectReason.loggedOut) {
       conn.logger.error(`[BOT PRINCIPAL] Sesión cerrada (logged out). Por favor, elimina la carpeta ${global.authFile} y escanea nuevamente.`);
-      // Puedes añadir un `process.exit(0)` aquí si quieres que el bot se detenga
-      // y requiera intervención manual para volver a iniciar sesión.
+      process.exit(0); // Terminar el proceso si el bot se desloguea, requiere intervención manual
     } else if (reason === DisconnectReason.restartRequired) {
       conn.logger.info(`[BOT PRINCIPAL] Reinicio necesario. Reiniciando manejador...`);
       await global.reloadHandler(true).catch(console.error);
@@ -490,7 +487,7 @@ async function initSubBot(subBotId) {
     const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
 
     const subConnOptions = {
-      logger: pino({ level: 'info' }), // <<--- CAMBIADO A 'info' PARA DEPURACIÓN. CAMBIAR A 'silent' EN PRODUCCIÓN.
+      logger: pino({ level: 'info' }), // <<--- Nivel de log 'info' es CRÍTICO para depuración de sub-bots.
       printQRInTerminal: false,
       mobile: MethodMobile,
       browser: [`Sub-Bot ${subBotId}`, 'Chrome', '110.0.5585.95'],
@@ -508,10 +505,11 @@ async function initSubBot(subBotId) {
       msgRetryCounterCache,
       msgRetryCounterMap,
       defaultQueryTimeoutMs: undefined,
-      version: [2, 3000, 1023223821], // Considera actualizar Baileys y esta versión si el problema persiste
+      version: [2, 3000, 1023223821], // Versión de Baileys, considera actualizar si hay problemas
     };
 
     const subConn = makeWASocket(subConnOptions);
+    global.conns[subBotId] = subConn; // Asegura que la conexión está en global.conns desde el inicio
 
     // --- MANEJADOR DE ACTUALIZACIÓN DE CONEXIÓN PARA CADA SUB-BOT ---
     subConn.ev.on('connection.update', async (update) => {
@@ -523,15 +521,12 @@ async function initSubBot(subBotId) {
       console.log(chalk.magenta(`  - lastDisconnect error: ${JSON.stringify(lastDisconnect?.error?.message || lastDisconnect?.error || 'N/A')}`));
       console.log(chalk.magenta(`  - isNewLogin: ${isNewLogin}`));
       console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws.socket ? subConn.ws.socket.readyState : 'No socket object'}`));
-
-      // Añadir la conexión a global.conns inmediatamente si se recibe una actualización de estado
-      // Esto es redundante pero asegura que siempre esté ahí.
-      global.conns[subBotId] = subConn;
+      console.log(chalk.magenta(`  - conn.connection actual: '${subConn.connection}' (debería ser el mismo que 'status')`));
 
       if (isNewLogin) {
         console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente. Estableciendo en global.conns.`));
-        // Adjuntar el manejador de mensajes si es un nuevo login
-        if (!subConn.handler) { // Evitar duplicar el manejador
+        // Adjuntar el manejador de mensajes solo si no existe
+        if (!subConn.handler) {
           subConn.handler = handler.handler.bind(subConn);
           subConn.ev.on('messages.upsert', subConn.handler);
           console.log(chalk.green(`${subBotName}: Manejador de mensajes adjuntado.`));
@@ -540,30 +535,32 @@ async function initSubBot(subBotId) {
 
       if (connection === 'open') {
         console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
-        global.conns[subBotId] = subConn; // Confirma que está en global.conns
-        if (!subConn.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene
+        // Aquí no necesitas reasignar global.conns[subBotId] = subConn; porque ya se hizo al crear la conexión.
+        if (!subConn.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene (ej. tras una reconexión)
           subConn.handler = handler.handler.bind(subConn);
           subConn.ev.on('messages.upsert', subConn.handler);
-          console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión.`));
+          console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión/reinicio.`));
         }
       } else if (connection === 'close') {
         const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
         console.error(chalk.red(`${subBotName}: Conexión cerrada. Razón: ${reason || 'Desconocida'}.`));
 
-        // Eliminar el sub-bot de global.conns si la conexión se cierra
-        delete global.conns[subBotId];
-        console.log(chalk.red(`${subBotName}: Eliminado de global.conns.`));
-
-        // Remover el manejador de eventos y la referencia para liberar recursos
+        // Remover el manejador de eventos y la referencia para liberar recursos ANTES de intentar reiniciar
         if (subConn.handler) {
           subConn.ev.off('messages.upsert', subConn.handler);
           delete subConn.handler;
         }
+        subConn.ev.removeAllListeners(); // Eliminar todos los listeners
+        // NOTA: No eliminar de global.conns aquí si vas a intentar reiniciar,
+        // ya que la referencia es necesaria para el setTimeout.
+        // Se eliminará si la reconexión falla por 'loggedOut' o si se cierra permanentemente.
 
         if (reason === DisconnectReason.loggedOut) {
           console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
-          // Podrías añadir un `rmSync(subBotAuthFile, { recursive: true, force: true });` aquí
-          // ¡Úsalo con extrema precaución, ya que borrará la sesión permanentemente!
+          // Aquí SÍ debes eliminar de global.conns porque la sesión está muerta
+          delete global.conns[subBotId];
+          console.log(chalk.red(`${subBotName}: Eliminado permanentemente de global.conns debido a loggedOut.`));
+          // Opcional: rmSync(subBotAuthFile, { recursive: true, force: true }); para borrar la sesión rota.
         } else {
           // Para otras razones de desconexión, intentamos un reinicio con un pequeño retardo
           console.warn(chalk.yellow(`${subBotName}: Se desconectó (${reason}). Intentando reiniciar en 5 segundos...`));
