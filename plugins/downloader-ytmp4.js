@@ -16,7 +16,7 @@ let handler = async (m, { conn, text, command }) => {
 await conn.sendMessage(m.chat, { react: { text: '🕒', key: m.key } })
 
     // Llamar a la API
-    const apiUrl = `https://apiadonix.vercel.app/api/ytmp4?url=${encodeURIComponent(url)}`
+    const apiUrl = `https://myapiadonix.vercel.app/api/ytmp4?url=${encodeURIComponent(url)}`
     console.log('🔗 URL usada para API:', apiUrl)
 
     const res = await fetch(apiUrl)
