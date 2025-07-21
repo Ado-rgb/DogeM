@@ -1,88 +1,106 @@
-import ws from 'ws' // Import WebSocket module to check ws.OPEN state
-import chalk from 'chalk' // For colored console output, useful for debugging
+import chalk from 'chalk';
+import fs from 'fs'; // Asegúrate de que fs esté importado para leer bots.json
+import path from 'path';
 
-async function handler(m, { conn: stars, usedPrefix }) {
-  let connectedSubBots = []
-  let mentionedJids = []; // Array to store JIDs for mentions in the final message
-
-  console.log(chalk.blue('--- [COMMAND: .bots] Starting sub-bot check ---'));
-  console.log(chalk.blue(`[COMMAND: .bots] Initial count of global.conns entries: ${Object.keys(global.conns).length}`));
-
-  // Add a small delay to allow connection states to settle.
-  // This helps mitigate race conditions where a bot might be marked as connected
-  // in index.js but its state isn't fully propagated or stable when .bots is called.
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for 1 second
-
-  console.log(chalk.blue(`[COMMAND: .bots] Count of global.conns entries after 1 second delay: ${Object.keys(global.conns).length}`));
-
-  // Iterate over the sub-bots stored in global.conns
-  // Using Object.entries to get both the subBotId (key) and the conn object (value)
-  for (const [subBotId, conn] of Object.entries(global.conns)) {
-
-    // Validate that the connection object and its 'user' property exist.
-    // A 'conn' object without 'conn.user' is usually an incomplete or failed connection.
-    if (!conn || !conn.user) {
-      console.log(chalk.yellow(`[COMMAND: .bots][DEBUG] Sub-bot ${subBotId}: Connection object or user info not found in global.conns. Skipping.`));
-      continue; // Skip to the next iteration if invalid
+const handler = async (m, { conn, command, isOwner }) => {
+    // Si no es el propietario, no tiene acceso
+    if (!isOwner) {
+        return m.reply('Solo el propietario puede usar este comando.');
     }
 
-    // --- CRITICAL CONNECTION STATE CHECKS ---
-    // 1. Check WebSocket readyState: ws.OPEN (which is typically 1) means the socket is open and ready.
-    const isWsSocketOpen = conn.ws.socket && conn.ws.socket.readyState === ws.OPEN;
+    const subBotId = m.text.split(' ')[1]; // Extraer el ID si se proporciona
 
-    // 2. Check Baileys 'connection' status: 'open' is the most reliable state from Baileys.
-    const isBaileysStatusOpen = conn.connection === 'open';
+    if (subBotId) {
+        // Lógica para manejar comandos específicos para un sub-bot, si los quieres añadir en el futuro
+        // Por ahora, solo lista el estado general
+        return m.reply(`Función para manejar sub-bot específico '${subBotId}' aún no implementada.`);
+    }
 
-    // Detailed debug logging for each sub-bot being processed
-    console.log(chalk.cyan(`[COMMAND: .bots][DEBUG] Processing Sub-bot: ${subBotId} (JID: ${conn.user.jid})`));
-    console.log(chalk.cyan(`  - Baileys Connection Status (conn.connection): '${conn.connection}' (Expected: 'open')`));
-    console.log(chalk.cyan(`  - WebSocket readyState (conn.ws.socket.readyState): ${conn.ws.socket ? conn.ws.socket.readyState : 'No socket'} (Expected: ${ws.OPEN} - OPEN)`));
-    console.log(chalk.cyan(`  - Is WebSocket Open (isWsSocketOpen)? ${isWsSocketOpen}`));
-    console.log(chalk.cyan(`  - Is Baileys Status Open (isBaileysStatusOpen)? ${isBaileysStatusOpen}`));
+    let response = '';
+    const connectedSubBotsFile = './bots.json'; // Ruta al archivo bots.json
+    let knownSubBots = [];
 
-    // If both WebSocket and Baileys connection statuses are 'open', consider it connected
-    if (isWsSocketOpen && isBaileysStatusOpen) {
-      connectedSubBots.push(conn); // Add the full connection object to our list
-      mentionedJids.push(conn.user.jid); // Add the full JID for mentions
-      console.log(chalk.green(`  -> Sub-bot ${subBotId} DETECTED AS CONNECTED AND OPERATIONAL.`));
+    // Cargar IDs de sub-bots conocidos desde bots.json
+    if (fs.existsSync(connectedSubBotsFile)) {
+        try {
+            knownSubBots = JSON.parse(fs.readFileSync(connectedSubBotsFile, 'utf8'));
+            if (!Array.isArray(knownSubBots)) {
+                console.error(chalk.red('[.bots] bots.json no es un array válido.'));
+                knownSubBots = [];
+            }
+        } catch (e) {
+            console.error(chalk.red(`[.bots] Error al leer bots.json: ${e}`));
+            knownSubBots = [];
+        }
+    }
+
+    // Obtener los IDs de los sub-bots de la carpeta serbot
+    const serbotDir = './serbot';
+    let subBotDirs = [];
+    if (fs.existsSync(serbotDir)) {
+        subBotDirs = fs.readdirSync(serbotDir).filter(f => fs.statSync(path.join(serbotDir, f)).isDirectory());
+    }
+
+    // Combinar IDs conocidos y IDs de directorio para tener una lista completa de sub-bots a verificar
+    const allSubBotIds = [...new Set([...knownSubBots, ...subBotDirs])]; // Combina y elimina duplicados
+
+    if (allSubBotIds.length === 0) {
+        response = `*🤖 No hay sub-bots configurados o conectados en este momento.*`;
     } else {
-      console.log(chalk.red(`  -> Sub-bot ${subBotId} IS NOT CONNECTED (one or both states are not 'open').`));
+        response += `*🤖 Estado de Sub-bots:*\n\n`;
+        let connectedCount = 0;
+        let disconnectedCount = 0;
+        let unknownCount = 0;
+
+        for (const id of allSubBotIds) {
+            const subConn = global.conns[id];
+            const hasCreds = fs.existsSync(path.join(serbotDir, id, 'creds.json'));
+
+            response += `*ID:* \`${id}\`\n`;
+            response += `  - *Sesión Existente:* ${hasCreds ? '✅ Sí' : '❌ No'}\n`;
+
+            if (subConn) {
+                const connectionStatus = subConn.connection; // 'open', 'close', 'connecting'
+                const wsReadyState = subConn.ws?.socket?.readyState; // 0: CONNECTING, 1: OPEN, 2: CLOSING, 3: CLOSED
+
+                // Información detallada para depuración (solo en consola)
+                console.log(chalk.magenta(`[COMMAND: .bots][DEBUG] Procesando Sub-bot: ${id}`));
+                console.log(chalk.magenta(`  - Baileys Connection Status (conn.connection): '${connectionStatus}' (Expected: 'open')`));
+                console.log(chalk.magenta(`  - WebSocket readyState (conn.ws.socket.readyState): ${wsReadyState} (Expected: 1 - OPEN)`));
+
+                if (connectionStatus === 'open' && wsReadyState === 1) {
+                    response += `  - *Estado:* ${chalk.green('✅ Conectado')}\n`;
+                    connectedCount++;
+                } else if (connectionStatus === 'connecting' || wsReadyState === 0) {
+                    response += `  - *Estado:* ${chalk.yellow('🟡 Conectando...')}\n`;
+                    unknownCount++;
+                } else if (connectionStatus === 'close' || wsReadyState === 2 || wsReadyState === 3) {
+                    response += `  - *Estado:* ${chalk.red('❌ Desconectado')}\n`;
+                    disconnectedCount++;
+                } else {
+                    response += `  - *Estado:* ${chalk.gray('❓ Desconocido/Problema')}\n`;
+                    unknownCount++;
+                }
+            } else {
+                response += `  - *Estado:* ${chalk.gray('❓ No cargado en memoria')}\n`;
+                if (hasCreds) {
+                    response += `    _Puede que necesite un reinicio para cargar._\n`;
+                }
+                unknownCount++;
+            }
+            response += '\n'; // Espacio entre cada bot
+        }
+
+        response += `*Resumen:*\n`;
+        response += `  - ✅ Conectados: ${connectedCount}\n`;
+        response += `  - ❌ Desconectados: ${disconnectedCount}\n`;
+        response += `  - ❓ Pendientes/Desconocidos: ${unknownCount}\n`;
     }
-  }
 
-  // If no sub-bots are connected after checking all entries
-  if (connectedSubBots.length === 0) {
-    let responseMessage = `*🤖 No hay sub-bots conectados en este momento.*`;
-    await stars.sendMessage(m.chat, { text: responseMessage }, { quoted: m });
-    console.log(chalk.red('--- [COMMAND: .bots] No connected sub-bots found. ---'));
-    return; // Exit the function
-  }
+    m.reply(response);
+};
 
-  // Generate the message with connected sub-bot information
-  let message = connectedSubBots.map((v, index) => {
-    // Clean the JID to get only the number for display
-    const jidNumber = v.user.jid.replace(/[^0-9]/g, ''); 
-    // Get the bot's name, preferring verifiedName, then name, then a default
-    const name = v.user.verifiedName || v.user.name || 'Sin Nombre'; 
-
-    return `*${index + 1}.- Sub-Bot*\n*Número:* @${jidNumber}\n*Enlace:* https://wa.me/${jidNumber}\n*Nombre:* ${name}`;
-  }).join('\n\n');
-
-  let totalSubBots = connectedSubBots.length;
-  let responseMessage = `*📊 Total de Sub-Bots Conectados:* ${totalSubBots}\n\n${message.trim()}`.trim();
-
-  // Send the message, including mentions for the JIDs
-  await stars.sendMessage(m.chat, { 
-    text: responseMessage, 
-    mentions: mentionedJids 
-  }, { quoted: m });
-
-  console.log(chalk.green(`--- [COMMAND: .bots] Command executed successfully. Listed ${totalSubBots} sub-bots. ---`));
-}
-
-// Command aliases and help info
-handler.command = ['listjadibot', 'bots', 'subbots']; 
-handler.help = ['bots', 'subbots'];
-handler.tags = ['serbot']; // Tag for grouping in help commands
-
+handler.help = ['bots'];
+handler.tags = ['owner'];
+handler.command = ['bots', 'subbots'];
 export default handler;
