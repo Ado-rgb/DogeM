@@ -164,7 +164,7 @@ if (!fs.existsSync(`./${authFile}/creds.json`)) {
         rl.close();
         addNumber = phoneNumber.replace(/\D/g, '');
         // const PHONENUMBER_MCC = { ... }; // Este objeto no se usa aquí
-        
+
         setTimeout(async () => {
           let codigo = await conn.requestPairingCode(addNumber);
           codigo = codigo?.match(/.{1,4}/g)?.join("-") || codigo;
@@ -278,9 +278,9 @@ async function connectionUpdate(update) {
   const { connection, lastDisconnect, isNewLogin } = update;
   global.stopped = connection; // Almacena el estado de conexión globalmente
   if (isNewLogin) conn.isInit = true; // Marca como inicializado tras nuevo login
-  
+
   const code = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.output?.payload?.statusCode;
-  
+
   // Manejo de desconexiones
   if (connection === 'close') {
     let reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
@@ -323,7 +323,7 @@ async function connectionUpdate(update) {
 
   // Carga de base de datos si es nula (seguridad)
   if (global.db.data == null) loadDatabase();
-  
+
   // Manejo de QR si aplica
   if (update.qr != 0 && update.qr != undefined || methodCodeQR) {
     if (opcion == '1' || methodCodeQR) {
@@ -398,7 +398,7 @@ global.reloadHandler = async function (restatConn) {
       // Remover oyentes antiguos para evitar duplicados
       if (subConn.handler) subConn.ev.off('messages.upsert', subConn.handler);
       // Adjuntar el manejador (usamos el mismo manejador principal para simplicidad)
-      subConn.handler = handler.handler.bind(subConn); 
+      subConn.handler = handler.handler.bind(subConn);
       subConn.ev.on('messages.upsert', subConn.handler);
       console.log(chalk.magenta(`[RELOAD HANDLER] Manejador re-adjuntado para el sub-bot: ${subBotId}`));
     } else {
@@ -465,6 +465,125 @@ watch(pluginFolder, global.reload); // Observar cambios en la carpeta de plugins
 // --- Gestión de Sub-bots ---
 global.conns = {}; // Objeto global para almacenar las conexiones de los sub-bots
 
+// Nueva función para iniciar o reiniciar un sub-bot específico
+async function initSubBot(subBotId) {
+  const serbotDir = './serbot';
+  const subBotAuthFile = join(serbotDir, subBotId);
+
+  // Asegurarse de que el directorio del sub-bot existe
+  if (!existsSync(subBotAuthFile)) {
+    console.error(chalk.red(`[SUB-BOT-INIT] Directorio de sesión no encontrado para ${subBotId}: ${subBotAuthFile}`));
+    return;
+  }
+
+  console.log(chalk.blue(`[SUB-BOT-INIT] Intentando iniciar/reiniciar sub-bot: ${subBotId}`));
+
+  try {
+    // Si la conexión ya existe, la cerramos limpiamente para un reinicio
+    if (global.conns[subBotId] && global.conns[subBotId].ws && global.conns[subBotId].ws.close) {
+      console.log(chalk.yellow(`[SUB-BOT-INIT] Cerrando conexión existente para ${subBotId} antes de reiniciar...`));
+      global.conns[subBotId].ev.removeAllListeners(); // Limpiar listeners antiguos
+      await global.conns[subBotId].ws.close();
+      delete global.conns[subBotId]; // Eliminar de global.conns temporalmente
+    }
+
+    const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
+
+    const subConnOptions = {
+      logger: pino({ level: 'info' }), // <<--- CAMBIADO A 'info' PARA DEPURACIÓN. CAMBIAR A 'silent' EN PRODUCCIÓN.
+      printQRInTerminal: false,
+      mobile: MethodMobile,
+      browser: [`Sub-Bot ${subBotId}`, 'Chrome', '110.0.5585.95'],
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+      },
+      markOnlineOnConnect: true,
+      generateHighQualityLinkPreview: true,
+      getMessage: async (clave) => {
+        let jid = jidNormalizedUser(clave.remoteJid);
+        let msg = await store.loadMessage(jid, clave.id);
+        return msg?.message || "";
+      },
+      msgRetryCounterCache,
+      msgRetryCounterMap,
+      defaultQueryTimeoutMs: undefined,
+      version: [2, 3000, 1023223821], // Considera actualizar Baileys y esta versión si el problema persiste
+    };
+
+    const subConn = makeWASocket(subConnOptions);
+
+    // --- MANEJADOR DE ACTUALIZACIÓN DE CONEXIÓN PARA CADA SUB-BOT ---
+    subConn.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, isNewLogin } = update;
+      const subBotName = `Sub-Bot [${subBotId}]`;
+
+      console.log(chalk.magenta(`[DEBUG-SUBBOT] ${subBotName} - Connection Update Received:`));
+      console.log(chalk.magenta(`  - Status: '${connection}'`));
+      console.log(chalk.magenta(`  - lastDisconnect error: ${JSON.stringify(lastDisconnect?.error?.message || lastDisconnect?.error || 'N/A')}`));
+      console.log(chalk.magenta(`  - isNewLogin: ${isNewLogin}`));
+      console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws.socket ? subConn.ws.socket.readyState : 'No socket object'}`));
+
+      // Añadir la conexión a global.conns inmediatamente si se recibe una actualización de estado
+      // Esto es redundante pero asegura que siempre esté ahí.
+      global.conns[subBotId] = subConn;
+
+      if (isNewLogin) {
+        console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente. Estableciendo en global.conns.`));
+        // Adjuntar el manejador de mensajes si es un nuevo login
+        if (!subConn.handler) { // Evitar duplicar el manejador
+          subConn.handler = handler.handler.bind(subConn);
+          subConn.ev.on('messages.upsert', subConn.handler);
+          console.log(chalk.green(`${subBotName}: Manejador de mensajes adjuntado.`));
+        }
+      }
+
+      if (connection === 'open') {
+        console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
+        global.conns[subBotId] = subConn; // Confirma que está en global.conns
+        if (!subConn.handler) { // Re-adjuntar manejador si por alguna razón no lo tiene
+          subConn.handler = handler.handler.bind(subConn);
+          subConn.ev.on('messages.upsert', subConn.handler);
+          console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión.`));
+        }
+      } else if (connection === 'close') {
+        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        console.error(chalk.red(`${subBotName}: Conexión cerrada. Razón: ${reason || 'Desconocida'}.`));
+
+        // Eliminar el sub-bot de global.conns si la conexión se cierra
+        delete global.conns[subBotId];
+        console.log(chalk.red(`${subBotName}: Eliminado de global.conns.`));
+
+        // Remover el manejador de eventos y la referencia para liberar recursos
+        if (subConn.handler) {
+          subConn.ev.off('messages.upsert', subConn.handler);
+          delete subConn.handler;
+        }
+
+        if (reason === DisconnectReason.loggedOut) {
+          console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
+          // Podrías añadir un `rmSync(subBotAuthFile, { recursive: true, force: true });` aquí
+          // ¡Úsalo con extrema precaución, ya que borrará la sesión permanentemente!
+        } else {
+          // Para otras razones de desconexión, intentamos un reinicio con un pequeño retardo
+          console.warn(chalk.yellow(`${subBotName}: Se desconectó (${reason}). Intentando reiniciar en 5 segundos...`));
+          setTimeout(() => initSubBot(subBotId), 5000);
+        }
+      }
+    });
+
+    // Manejador de actualización de credenciales del sub-bot
+    subConn.ev.on('creds.update', saveSubCreds);
+
+  } catch (e) {
+    console.error(chalk.red(`[SUB-BOT-INIT] Fallo crítico al iniciar el sub-bot ${subBotId}:`), e);
+    // Si falla el inicio, intentar de nuevo después de un retardo
+    console.warn(chalk.yellow(`[SUB-BOT-INIT] Reintentando iniciar ${subBotId} en 10 segundos debido a un error...`));
+    setTimeout(() => initSubBot(subBotId), 10000);
+  }
+}
+
+// Función principal para iniciar todos los sub-bots
 async function startSubBots() {
   const serbotDir = './serbot';
   if (!existsSync(serbotDir)) {
@@ -479,109 +598,17 @@ async function startSubBots() {
       return;
   }
 
-  console.log(chalk.blue(`[SUB-BOTS] Intentando iniciar ${subBotIds.length} sub-bots...`));
+  console.log(chalk.blue(`[SUB-BOTS] Iniciando proceso de carga para ${subBotIds.length} sub-bots...`));
 
   for (const subBotId of subBotIds) {
-    const subBotAuthFile = join(serbotDir, subBotId);
-    try {
-      const { state, saveCreds: saveSubCreds } = await useMultiFileAuthState(subBotAuthFile);
-
-      const subConnOptions = {
-        logger: pino({ level: 'silent' }), // Silenciar logs de Pino para sub-bots
-        printQRInTerminal: false, // Los sub-bots no necesitan QR en la terminal
-        mobile: MethodMobile,
-        browser: [`Sub-Bot ${subBotId}`, 'Chrome', '110.0.5585.95'], // Navegador personalizable para sub-bots
-        auth: {
-          creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
-        },
-        markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true,
-        getMessage: async (clave) => {
-          let jid = jidNormalizedUser(clave.remoteJid);
-          let msg = await store.loadMessage(jid, clave.id);
-          return msg?.message || "";
-        },
-        msgRetryCounterCache,
-        msgRetryCounterMap,
-        defaultQueryTimeoutMs: undefined,
-        version: [2, 3000, 1023223821],
-      };
-
-      const subConn = makeWASocket(subConnOptions);
-
-      // --- MANEJADOR DE ACTUALIZACIÓN DE CONEXIÓN PARA CADA SUB-BOT ---
-      subConn.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, isNewLogin } = update;
-        const subBotName = `Sub-Bot [${subBotId}]`;
-        
-        // Debugging del estado de conexión del sub-bot
-        console.log(chalk.magenta(`[DEBUG-SUBBOT] ${subBotName} - Actualización de conexión:`));
-        console.log(chalk.magenta(`  - Connection status: '${connection}'`));
-        console.log(chalk.magenta(`  - WebSocket readyState: ${subConn.ws.socket ? subConn.ws.socket.readyState : 'No socket'}`));
-        
-        if (isNewLogin) {
-          console.log(chalk.green(`${subBotName}: Sesión iniciada correctamente. Añadiendo a global.conns.`));
-          global.conns[subBotId] = subConn; // <<-- AÑADE LA CONEXIÓN DEL SUB-BOT A GLOBAL.CONNS
-          // Una vez conectado, adjuntamos el manejador de mensajes
-          // Usamos el mismo 'handler' principal para todos los bots (principal y sub-bots)
-          subConn.handler = handler.handler.bind(subConn); 
-          subConn.ev.on('messages.upsert', subConn.handler);
-          console.log(chalk.green(`${subBotName}: Manejador de mensajes adjuntado.`));
-        }
-
-        if (connection === 'open') {
-          console.log(chalk.green(`✅ ${subBotName}: Conectado y listo para operar.`));
-          // Re-asegura que esté en global.conns en cada apertura exitosa (útil para reconexiones)
-          global.conns[subBotId] = subConn; 
-          // Si por alguna razón el manejador no se adjuntó (ej. después de una desconexión suave sin newLogin)
-          if (!subConn.handler) {
-            subConn.handler = handler.handler.bind(subConn);
-            subConn.ev.on('messages.upsert', subConn.handler);
-            console.log(chalk.green(`${subBotName}: Manejador de mensajes re-adjuntado tras reconexión.`));
-          }
-        } else if (connection === 'close') {
-          const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-          console.error(chalk.red(`${subBotName}: Conexión cerrada. Razón: ${reason || 'Desconocida'}.`));
-          
-          // Elimina el sub-bot de global.conns si la conexión se cierra
-          delete global.conns[subBotId]; 
-          console.log(chalk.red(`${subBotName}: Eliminado de global.conns.`));
-          
-          // Remover el manejador de eventos para evitar errores y liberar recursos
-          if (subConn.handler) {
-            subConn.ev.off('messages.upsert', subConn.handler);
-            delete subConn.handler; // Limpiar la referencia
-          }
-
-          if (reason === DisconnectReason.loggedOut) {
-            console.error(chalk.red(`${subBotName}: Sesión cerrada (logged out). Por favor, elimina la carpeta '${subBotAuthFile}' y vuelve a autenticar.`));
-            // Opcional: Podrías añadir un `rmSync(subBotAuthFile, { recursive: true, force: true });` aquí
-            // para limpiar la sesión rota automáticamente. ¡Úsalo con precaución!
-          } else {
-            // Para otras razones de desconexión, puedes intentar una reconexión
-            // Baileys a menudo maneja esto automáticamente, pero si tienes problemas,
-            // podrías implementar una lógica de reintento con retardo aquí.
-            console.warn(chalk.yellow(`${subBotName}: Intentando reconectar en breve...`));
-            // setTimeout(() => startSubBots(), 5000); // Ejemplo de reintento tras 5 segundos (cuidado con bucles infinitos)
-          }
-        }
-      });
-
-      // Manejador de actualización de credenciales del sub-bot
-      subConn.ev.on('creds.update', saveSubCreds);
-
-      console.log(chalk.cyan(`[SUB-BOTS] Iniciado proceso de conexión para: ${subBotId}`));
-
-    } catch (e) {
-      console.error(chalk.red(`[SUB-BOTS] Fallo al iniciar el sub-bot ${subBotId}:`), e);
-    }
+    // Usamos la nueva función initSubBot para iniciar cada uno
+    await initSubBot(subBotId);
   }
 }
 // --- Fin Gestión de Sub-bots ---
 
 // Iniciar el manejador del bot principal y luego los sub-bots
-await global.reloadHandler(); 
+await global.reloadHandler();
 startSubBots().catch(console.error); // Ejecuta la función para iniciar los sub-bots
 
 // --- Funciones de soporte y limpieza ---
