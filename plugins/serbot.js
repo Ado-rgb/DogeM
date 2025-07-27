@@ -91,7 +91,7 @@ let handler = async (m, { conn: _conn, args }) => {
 
           await parent.reply(m.chat, txt, m)
         } catch (e) {
-          // si falla el requestPairingCode, no pasa nada, solo ignora
+          // si falla el requestPairingCode, no pasa nada, solo ig
         }
       }
 
