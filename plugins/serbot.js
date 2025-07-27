@@ -86,7 +86,7 @@ let handler = async (m, { conn: _conn, args }) => {
           txt += `│ 3. Elige *Vincular un dispositivo*\n`
           txt += `│ 4. Ingresa este código:\n`
           txt += `│\n│    *${formattedCode}*\n`
-          txt += `└───────────────────────────\n\n`
+          txt += `└─────────────────────\n\n`
           txt += `*Nota:* Solo funciona en el número que solicitó el código.`
 
           await parent.reply(m.chat, txt, m)
